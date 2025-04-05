@@ -1,0 +1,33 @@
+# Audio processing settings
+audio:
+  sample_rate: 44100
+  duration: 30  # seconds
+  hop_length: 512
+  n_fft: 2048
+  n_mels: 128
+
+# Symbolic music settings
+symbolic:
+  max_sequence_length: 1024
+  quantization_level: 16  # MIDI ticks per quarter note
+
+# Embedding settings
+embeddings:
+  audio:
+    model: "openl3"
+    content_type: "music"
+    input_repr: "mel256"
+    embedding_size: 512
+  symbolic:
+    model: "clamp"
+    embedding_size: 512
+
+# Analysis settings
+analysis:
+  similarity_metrics:
+    - "cosine"
+    - "euclidean"
+    - "manhattan"
+  dimensionality_reduction:
+    method: "pca"
+    n_components: 2 
