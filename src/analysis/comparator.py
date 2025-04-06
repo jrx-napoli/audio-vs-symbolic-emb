@@ -81,6 +81,7 @@ class EmbeddingComparator:
         # Combine embeddings
         all_embeddings = []
         labels = []
+        types = []  # Track embedding type (audio or symbolic)
         
         for filename in common_files:
             try:
@@ -90,9 +91,11 @@ class EmbeddingComparator:
                 if len(audio_emb) > 0 and len(symbolic_emb) > 0:
                     all_embeddings.append(audio_emb)
                     labels.append(f"{filename}_audio")
+                    types.append('audio')
                     
                     all_embeddings.append(symbolic_emb)
                     labels.append(f"{filename}_symbolic")
+                    types.append('symbolic')
             except Exception as e:
                 logger.error(f"Error processing embeddings for {filename}: {str(e)}")
                 continue
@@ -102,6 +105,7 @@ class EmbeddingComparator:
             return
         
         X = np.array(all_embeddings)
+        types = np.array(types)
         
         # Apply PCA
         pca = PCA(n_components=2)
@@ -116,17 +120,27 @@ class EmbeddingComparator:
         
         # PCA plot
         plt.subplot(1, 2, 1)
-        plt.scatter(X_pca[:, 0], X_pca[:, 1], alpha=0.5)
+        for emb_type in ['audio', 'symbolic']:
+            mask = types == emb_type
+            color = 'blue' if emb_type == 'audio' else 'red'
+            plt.scatter(X_pca[mask, 0], X_pca[mask, 1], alpha=0.5, 
+                       color=color, label=emb_type.capitalize())
         plt.title('PCA of Audio and Symbolic Embeddings')
         plt.xlabel('PC1')
         plt.ylabel('PC2')
+        plt.legend()
         
         # t-SNE plot
         plt.subplot(1, 2, 2)
-        plt.scatter(X_tsne[:, 0], X_tsne[:, 1], alpha=0.5)
+        for emb_type in ['audio', 'symbolic']:
+            mask = types == emb_type
+            color = 'blue' if emb_type == 'audio' else 'red'
+            plt.scatter(X_tsne[mask, 0], X_tsne[mask, 1], alpha=0.5,
+                       color=color, label=emb_type.capitalize())
         plt.title('t-SNE of Audio and Symbolic Embeddings')
         plt.xlabel('t-SNE1')
         plt.ylabel('t-SNE2')
+        plt.legend()
         
         plt.tight_layout()
         plt.savefig(self.output_dir / 'embedding_visualization.png')
