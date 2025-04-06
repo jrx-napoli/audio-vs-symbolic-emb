@@ -1,73 +1,134 @@
-import pretty_midi
-import numpy as np
+import os
 from pathlib import Path
-from typing import List, Dict, Any
+import numpy as np
+import pretty_midi
+from typing import Dict, List, Tuple
+import logging
+from tqdm import tqdm
+
+logger = logging.getLogger(__name__)
 
 class SymbolicProcessor:
-    def __init__(self, config: dict):
+    def __init__(self, max_notes: int = 1000):
         """
-        Initialize symbolic music processor with configuration.
+        Initialize the symbolic music processor.
         
         Args:
-            config: Configuration dictionary containing symbolic music processing parameters
+            max_notes: Maximum number of notes to process from each MIDI file
         """
-        self.config = config['symbolic']
-        self.max_sequence_length = self.config['max_sequence_length']
-        self.quantization_level = self.config['quantization_level']
+        self.max_notes = max_notes
     
-    def load_midi(self, file_path: str) -> pretty_midi.PrettyMIDI:
+    def load_midi(self, midi_path: Path) -> pretty_midi.PrettyMIDI:
         """
-        Load MIDI file.
+        Load and preprocess a MIDI file.
         
         Args:
-            file_path: Path to MIDI file
+            midi_path: Path to the MIDI file
             
         Returns:
             PrettyMIDI object
         """
-        return pretty_midi.PrettyMIDI(file_path)
+        try:
+            midi_data = pretty_midi.PrettyMIDI(str(midi_path))
+            return midi_data
+        except Exception as e:
+            logger.error(f"Error loading MIDI file {midi_path}: {str(e)}")
+            raise
     
-    def quantize_notes(self, midi: pretty_midi.PrettyMIDI) -> List[Dict[str, Any]]:
+    def extract_features(self, midi_data: pretty_midi.PrettyMIDI) -> Dict[str, np.ndarray]:
         """
-        Quantize notes to a fixed grid.
+        Extract features from MIDI data.
         
         Args:
-            midi: PrettyMIDI object
+            midi_data: PrettyMIDI object
             
         Returns:
-            List of quantized notes
+            Dictionary of extracted features
         """
-        quantized_notes = []
-        for instrument in midi.instruments:
-            for note in instrument.notes:
-                quantized_notes.append({
-                    'pitch': note.pitch,
-                    'start': int(note.start * self.quantization_level),
-                    'end': int(note.end * self.quantization_level),
-                    'velocity': note.velocity
-                })
-        return quantized_notes
+        features = {}
+        
+        # Get piano roll with fixed size
+        target_length = 1024  # Fixed length for all piano rolls
+        piano_roll = midi_data.get_piano_roll(fs=100)  # 100 Hz resolution
+        
+        # Resize piano roll to fixed length
+        if piano_roll.shape[1] > target_length:
+            piano_roll = piano_roll[:, :target_length]
+        elif piano_roll.shape[1] < target_length:
+            # Pad with zeros
+            pad_width = target_length - piano_roll.shape[1]
+            piano_roll = np.pad(piano_roll, ((0, 0), (0, pad_width)))
+        
+        features['piano_roll'] = piano_roll
+        
+        # Extract note features
+        notes = []
+        for instrument in midi_data.instruments:
+            for note in instrument.notes[:self.max_notes]:
+                notes.append([
+                    note.pitch,
+                    note.start,
+                    note.end,
+                    note.velocity
+                ])
+        
+        if notes:
+            note_features = np.array(notes)
+            features['note_features'] = note_features
+        
+        # Extract tempo changes
+        tempo_changes = []
+        try:
+            tempo_data = midi_data.get_tempo_changes()
+            if isinstance(tempo_data, tuple) and len(tempo_data) == 2:
+                times, tempos = tempo_data
+                for time, tempo in zip(times, tempos):
+                    tempo_changes.append([time, tempo])
+            elif len(tempo_data) > 0:
+                for time, tempo in tempo_data:
+                    tempo_changes.append([time, tempo])
+        except Exception as e:
+            logger.warning(f"Could not extract tempo changes: {str(e)}")
+        
+        if tempo_changes:
+            tempo_features = np.array(tempo_changes)
+            features['tempo_features'] = tempo_features
+        
+        return features
     
-    def extract_features(self, file_path: str) -> np.ndarray:
+    def process_directory(self, input_dir: Path, output_dir: Path) -> Dict[str, Dict[str, np.ndarray]]:
         """
-        Extract features from MIDI file.
+        Process all MIDI files in a directory.
         
         Args:
-            file_path: Path to MIDI file
+            input_dir: Directory containing MIDI files
+            output_dir: Directory to save processed features
             
         Returns:
-            Feature array
+            Dictionary mapping filenames to their features
         """
-        midi = self.load_midi(file_path)
-        notes = self.quantize_notes(midi)
+        results = {}
         
-        # Create piano roll representation
-        max_time = max(note['end'] for note in notes)
-        piano_roll = np.zeros((128, min(max_time, self.max_sequence_length)))
+        # Create output directory if it doesn't exist
+        output_dir.mkdir(parents=True, exist_ok=True)
         
-        for note in notes:
-            if note['start'] < self.max_sequence_length:
-                end = min(note['end'], self.max_sequence_length)
-                piano_roll[note['pitch'], note['start']:end] = note['velocity']
+        # Process each MIDI file
+        for midi_file in tqdm(list(input_dir.glob('*.mid'))):
+            try:
+                # Load MIDI file
+                midi_data = self.load_midi(midi_file)
+                
+                # Extract features
+                features = self.extract_features(midi_data)
+                
+                # Save features
+                filename = midi_file.stem
+                np.save(output_dir / f"{filename}_features.npy", features)
+                
+                results[filename] = features
+                
+            except Exception as e:
+                logger.error(f"Error processing {midi_file}: {str(e)}")
+                continue
         
-        return piano_roll 
+        return results 
