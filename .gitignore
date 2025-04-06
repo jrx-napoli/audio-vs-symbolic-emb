@@ -174,3 +174,22 @@ cython_debug/
 .pypirc
 
 data/raw/
+
+# Project specific
+results/
+data/processed/
+data/embeddings/
+*.wav
+*.mp3
+*.mid
+*.midi
+*.npy
+*.npz
+*.pkl
+*.csv
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.pdf
+*.log
