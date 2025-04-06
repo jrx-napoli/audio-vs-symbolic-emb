@@ -1,5 +1,0 @@
-mean_similarity: -0.047642501817583414
-std_similarity: 0.03370266577937951
-min_similarity: -0.11714873274648244
-max_similarity: 0.0
-median_similarity: -0.04942380470442699
