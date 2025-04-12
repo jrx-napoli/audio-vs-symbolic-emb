@@ -6,132 +6,131 @@ import soundfile as sf
 from typing import Dict, List, Tuple
 import logging
 import tqdm
+import openl3
+import tensorflow as tf
 
 logger = logging.getLogger(__name__)
 
 class AudioProcessor:
-    def __init__(self, sample_rate: int = 44100, duration: float = 10.0):
+    def __init__(self, output_dir: Path):
         """
         Initialize the audio processor.
         
         Args:
-            sample_rate: Target sample rate for audio processing
-            duration: Duration in seconds to process from each audio file
+            output_dir: Directory to save processed audio features
         """
-        self.sample_rate = sample_rate
-        self.duration = duration
+        self.output_dir = output_dir
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Initialize OpenL3 model
+        self.model = openl3.models.load_audio_embedding_model(
+            input_repr="mel256",
+            content_type="music",
+            embedding_size=512
+        )
     
-    def load_audio(self, audio_path: Path) -> Tuple[np.ndarray, int]:
+    def load_audio(self, file_path: Path) -> Tuple[np.ndarray, int]:
         """
-        Load and preprocess an audio file.
+        Load audio file.
         
         Args:
-            audio_path: Path to the audio file
+            file_path: Path to audio file
             
         Returns:
-            Tuple of (audio_data, sample_rate)
+            Tuple of (audio data, sample rate)
         """
         try:
-            # Load audio file
-            audio, sr = librosa.load(audio_path, sr=self.sample_rate, duration=self.duration)
-            
-            # Normalize audio
-            audio = librosa.util.normalize(audio)
-            
+            audio, sr = sf.read(str(file_path))
+            if len(audio.shape) > 1:
+                audio = audio.mean(axis=1)  # Convert to mono if stereo
             return audio, sr
-            
         except Exception as e:
-            logger.error(f"Error loading audio file {audio_path}: {str(e)}")
+            logger.error(f"Error loading audio file {file_path}: {str(e)}")
             raise
     
-    def extract_features(self, audio: np.ndarray) -> Dict[str, np.ndarray]:
+    def extract_features(self, audio: np.ndarray, sr: int) -> Dict[str, np.ndarray]:
         """
-        Extract audio features for embedding generation.
+        Extract audio features using OpenL3.
         
         Args:
-            audio: Audio data array
+            audio: Audio data
+            sr: Sample rate
             
         Returns:
-            Dictionary of extracted features
+            Dictionary of audio features
         """
-        features = {}
-        
-        # Extract mel spectrogram with fixed size
-        target_length = 1024  # Fixed length for all spectrograms
-        
-        mel_spec = librosa.feature.melspectrogram(
-            y=audio,
-            sr=self.sample_rate,
-            n_mels=128,
-            hop_length=512
-        )
-        mel_spec_db = librosa.power_to_db(mel_spec)
-        
-        # Resize spectrogram to fixed length
-        if mel_spec_db.shape[1] > target_length:
-            mel_spec_db = mel_spec_db[:, :target_length]
-        elif mel_spec_db.shape[1] < target_length:
-            # Pad with zeros
-            pad_width = target_length - mel_spec_db.shape[1]
-            mel_spec_db = np.pad(mel_spec_db, ((0, 0), (0, pad_width)))
-        
-        features['mel_spectrogram'] = mel_spec_db
-        
-        # Extract MFCCs
-        mfccs = librosa.feature.mfcc(
-            y=audio,
-            sr=self.sample_rate,
-            n_mfcc=13
-        )
-        features['mfcc'] = mfccs
-        
-        # Extract chroma features
         try:
-            chroma = librosa.feature.chroma_stft(
-                y=audio,
-                sr=self.sample_rate
+            # Extract OpenL3 embeddings
+            emb, ts = openl3.get_audio_embedding(
+                audio,
+                sr,
+                model=self.model,
+                center=True,
+                hop_size=0.1,
+                batch_size=32
             )
-            features['chroma'] = chroma
+            
+            # Average over time to get a single embedding
+            embedding = np.mean(emb, axis=0)
+            
+            return {
+                'embedding': embedding,
+                'timestamps': ts
+            }
+            
         except Exception as e:
-            logger.warning(f"Could not extract chroma features: {str(e)}")
-            # Use zeros as fallback
-            features['chroma'] = np.zeros((12, len(audio) // 512))
-        
-        return features
+            logger.error(f"Error extracting features: {str(e)}")
+            raise
     
-    def process_directory(self, input_dir: Path, output_dir: Path) -> Dict[str, Dict[str, np.ndarray]]:
+    def process_file(self, file_path: Path) -> Dict[str, np.ndarray]:
+        """
+        Process a single audio file.
+        
+        Args:
+            file_path: Path to audio file
+            
+        Returns:
+            Dictionary of processed features
+        """
+        try:
+            # Load audio
+            audio, sr = self.load_audio(file_path)
+            
+            # Extract features
+            features = self.extract_features(audio, sr)
+            
+            # Save features
+            output_path = self.output_dir / f"{file_path.stem}_features.npz"
+            np.savez(output_path, **features)
+            
+            return features
+            
+        except Exception as e:
+            logger.error(f"Error processing file {file_path}: {str(e)}")
+            raise
+    
+    def process_directory(self, input_dir: Path) -> Dict[str, Dict[str, np.ndarray]]:
         """
         Process all audio files in a directory.
         
         Args:
             input_dir: Directory containing audio files
-            output_dir: Directory to save processed features
             
         Returns:
             Dictionary mapping filenames to their features
         """
         results = {}
         
-        # Create output directory if it doesn't exist
-        output_dir.mkdir(parents=True, exist_ok=True)
+        # Get all audio files
+        audio_files = list(input_dir.glob('*.wav')) + list(input_dir.glob('*.mp3'))
         
-        # Process each audio file
-        for audio_file in tqdm.tqdm(list(input_dir.glob('*.wav'))):
+        for file_path in audio_files:
             try:
-                # Load and preprocess audio
-                audio, sr = self.load_audio(audio_file)
-                
-                # Extract features
-                features = self.extract_features(audio)
-                
-                # Save features
-                filename = audio_file.stem
-                np.save(output_dir / f"{filename}_features.npy", features)
-                
-                results[filename] = features
-                
+                features = self.process_file(file_path)
+                results[file_path.stem] = features
+                logger.info(f"Processed {file_path.name}")
             except Exception as e:
-                logger.error(f"Error processing {audio_file}: {str(e)}")
+                logger.error(f"Failed to process {file_path.name}: {str(e)}")
                 continue
         
         return results 
