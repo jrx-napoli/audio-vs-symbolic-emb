@@ -193,3 +193,6 @@ data/embeddings/
 *.gif
 *.pdf
 *.log
+
+# idea
+.idea/

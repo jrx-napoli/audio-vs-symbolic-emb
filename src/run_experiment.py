@@ -4,6 +4,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from sklearn.decomposition import PCA
 
 from analysis.comparator import EmbeddingComparator
 from audio.processor import AudioProcessor
@@ -81,22 +82,36 @@ class ExperimentRunner:
         # Process audio embeddings
         for k, v in self.results['audio_embeddings'].items():
             try:
-                if 'mel_spectrogram' in v:
-                    audio_embeddings[k] = v['mel_spectrogram'].flatten()
+                if 'embeddings' in v:
+                    # Average OpenL3 embeddings over time
+                    audio_embeddings[k] = np.mean(v['embeddings'], axis=0)
                 else:
-                    logger.warning(f"No mel spectrogram found for {k}")
+                    logger.warning(f"No embeddings found for {k}")
             except Exception as e:
                 logger.error(f"Error processing audio embedding for {k}: {str(e)}")
 
         # Process symbolic embeddings
+        # First collect all piano rolls to fit PCA
+        all_piano_rolls = []
+        valid_keys = []
         for k, v in self.results['symbolic_embeddings'].items():
             try:
                 if 'piano_roll' in v:
-                    symbolic_embeddings[k] = v['piano_roll'].flatten()
+                    all_piano_rolls.append(v['piano_roll'].flatten())
+                    valid_keys.append(k)
                 else:
                     logger.warning(f"No piano roll found for {k}")
             except Exception as e:
                 logger.error(f"Error processing symbolic embedding for {k}: {str(e)}")
+
+        if all_piano_rolls:
+            # Fit PCA on all piano rolls
+            pca = PCA(n_components=512)  # Match OpenL3 embedding size
+            pca.fit(np.array(all_piano_rolls))
+            
+            # Transform each piano roll
+            for k, piano_roll in zip(valid_keys, all_piano_rolls):
+                symbolic_embeddings[k] = pca.transform(piano_roll.reshape(1, -1))[0]
 
         # Validate embeddings
         if not audio_embeddings:
@@ -107,8 +122,7 @@ class ExperimentRunner:
         self.results['audio_embeddings'] = audio_embeddings
         self.results['symbolic_embeddings'] = symbolic_embeddings
 
-        logger.info(
-            f"Generated {len(audio_embeddings)} audio embeddings and {len(symbolic_embeddings)} symbolic embeddings")
+        logger.info(f"Generated {len(audio_embeddings)} audio embeddings and {len(symbolic_embeddings)} symbolic embeddings")
 
     def compute_similarities(self) -> None:
         """Compute similarity metrics between embeddings."""

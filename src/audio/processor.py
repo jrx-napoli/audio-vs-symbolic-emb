@@ -55,7 +55,7 @@ class AudioProcessor:
             sr: Sample rate
             
         Returns:
-            Dictionary of audio features
+            Dictionary of audio features containing time-series embeddings
         """
         try:
             # Extract OpenL3 embeddings
@@ -68,11 +68,8 @@ class AudioProcessor:
                 batch_size=32
             )
 
-            # Average over time to get a single embedding
-            embedding = np.mean(emb, axis=0)
-
             return {
-                'embedding': embedding,
+                'embeddings': emb,  # Time-series embeddings
                 'timestamps': ts
             }
 
