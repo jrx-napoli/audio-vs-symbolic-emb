@@ -2,29 +2,8 @@ import os
 import math
 import mido
 import random
-import argparse
 from tqdm import tqdm
 from multiprocessing import Pool
-
-# Parse command-line arguments
-def parse_args():
-    parser = argparse.ArgumentParser(description="Convert MIDI files to MTF format.")
-    parser.add_argument(
-        "input_dir",
-        type=str,
-        help="Path to the folder containing MIDI (.midi, .mid) files"
-    )
-    parser.add_argument(
-        "output_dir",
-        type=str,
-        help="Path to the folder where converted MTF files will be saved"
-    )
-    parser.add_argument(
-        "--m3_compatible",
-        action="store_true",
-        help="Enable M3 compatibility (remove metadata like text, copyright, lyrics, etc.)"
-    )
-    return parser.parse_args()
 
 def msg_to_str(msg):
     str_msg = ""
@@ -77,16 +56,14 @@ def convert_midi2mtf(file_list, input_dir, output_dir, m3_compatible):
                 f.write(file + " " + str(e) + '\n')
             pass
 
-if __name__ == '__main__':
-    # Parse command-line arguments
-    args = parse_args()
-    input_dir = os.path.abspath(args.input_dir)  # Ensure absolute path
-    output_dir = os.path.abspath(args.output_dir)  # Ensure absolute path
-    m3_compatible = args.m3_compatible  # Get M3 compatibility flag
+def midi_2_mtf(input_dir, output_dir):
 
     file_list = []
     os.makedirs("logs", exist_ok=True)
     # Traverse the specified input folder for MIDI files
+    input_dir = os.path.abspath(input_dir)
+
+    
     for root, dirs, files in os.walk(input_dir):
         for file in files:
             if not file.endswith((".mid", ".midi")):
@@ -105,5 +82,5 @@ if __name__ == '__main__':
     pool = Pool(processes=os.cpu_count())
     pool.starmap(
         convert_midi2mtf, 
-        [(file_list_chunk, input_dir, output_dir, m3_compatible) for file_list_chunk in file_lists]
+        [(file_list_chunk, input_dir, output_dir, True) for file_list_chunk in file_lists]
     )

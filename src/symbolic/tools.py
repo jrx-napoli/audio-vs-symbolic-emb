@@ -2,12 +2,8 @@ import os
 import sys
 import shutil
 import subprocess
-import re
 import os
-import random
-from config import *
-from unidecode import unidecode #TODO: Add to requirements
-
+from .config import *
 
 def contains_midi_files(directory):
     '''Check if the directory (recursively) contains any MIDI files (.mid or .midi).'''
@@ -45,26 +41,4 @@ def remove_folder(folder):
             print(f'Failed to delete "{folder}": {e}')
             sys.exit(1)
 
-def extract_mid_features(mid_dir, feat_dir=None, global_flag=True):
-    '''Extract performance signal features from MIDI files.'''
-    global_flag = ' --get_global' if global_flag else ''
 
-    # Step 0: Convert to absolute path
-    mid_dir = os.path.abspath(mid_dir)
-    if feat_dir is not None:
-        feat_dir = os.path.abspath(feat_dir)
-
-    # Step 1: Delete temp folder
-    remove_folder('temp/mtf')
-
-
-    # Step 2: Convert MIDI files to MTF format
-    run_command(f'python midi2mtf.py "{mid_dir}" ./temp/mtf --m3_compatible')
-
-
-    # Step 3: Run extract_clamp3.py
-    if feat_dir is None:
-        run_command(f'python extract_clamp3.py ./temp/mtf ../cache/mid_features{global_flag}')
-    else:
-        feat_dir = os.path.abspath(feat_dir)
-        run_command(f'python extract_clamp3.py ./temp/mtf "{feat_dir}"{global_flag}')

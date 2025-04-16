@@ -2,7 +2,7 @@ import re
 import os
 import torch 
 import random
-from config import *
+from .config import *
 from unidecode import unidecode
 from torch.nn import functional as F
 from transformers import AutoModel, BertModel, GPT2LMHeadModel, PreTrainedModel, GPT2Config
