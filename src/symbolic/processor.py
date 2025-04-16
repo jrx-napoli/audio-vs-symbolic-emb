@@ -3,11 +3,14 @@ import sys
 from .tools import contains_midi_files, run_command, remove_folder
 from .midi2mtf import midi_2_mtf
 from pathlib import Path
+from typing import Dict
+
 import numpy as np
 from typing import Dict
 import logging
 from .extract_clamp3 import extract_features
 logger = logging.getLogger(__name__)
+
 
 class SymbolicProcessor:
     def process_directory(self, input_dir: Path, output_dir: Path) -> Dict[str, Dict[str, np.ndarray]]:

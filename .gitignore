@@ -194,3 +194,5 @@ data/embeddings/
 *.pdf
 *.log
 *.pth
+# idea
+.idea/
