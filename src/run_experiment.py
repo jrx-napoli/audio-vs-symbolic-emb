@@ -91,14 +91,13 @@ class ExperimentRunner:
                     logger.warning(f"No mel spectrogram found for {k}")
             except Exception as e:
                 logger.error(f"Error processing audio embedding for {k}: {str(e)}")
-        
         # Process symbolic embeddings
         for k, v in self.results['symbolic_embeddings'].items():
             try:
-                if 'piano_roll' in v:
-                    symbolic_embeddings[k] = v['piano_roll'].flatten()
+                if 'embeddings' in v:
+                    symbolic_embeddings[k] = np.mean(v['embeddings'], axis=0)
                 else:
-                    logger.warning(f"No piano roll found for {k}")
+                    logger.warning(f"No embeddings found for {k}")
             except Exception as e:
                 logger.error(f"Error processing symbolic embedding for {k}: {str(e)}")
         

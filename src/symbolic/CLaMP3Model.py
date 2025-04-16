@@ -306,7 +306,8 @@ class CLaMP3Model(PreTrainedModel):
                  load_m3=CLAMP3_LOAD_M3):
         super(CLaMP3Model, self).__init__(symbolic_config)
 
-        self.text_model = AutoModel.from_pretrained(text_model_name) # Load the text model
+        self.text_model = AutoModel.from_pretrained(text_model_name, torch_dtype=torch.float16,
+    low_cpu_mem_usage=True) # Load the text model
         self.text_proj = torch.nn.Linear(self.text_model.config.hidden_size, hidden_size) # Linear layer for text projections
         torch.nn.init.normal_(self.text_proj.weight, std=0.02) # Initialize weights with normal distribution
 

@@ -86,7 +86,7 @@ def extract_features(input_dir, output_dir=None) -> Dict[str, Dict[str, np.ndarr
     model.load_state_dict(checkpoint['model'])
 
     # process the files
-    process_directory(input_dir, output_dir, files, patchilizer, model, accelerator, device)
+    return process_directory(input_dir, output_dir, files, patchilizer, model, accelerator, device)
 def extract_feature(filename, patchilizer, model, device):
     if not filename.endswith(".npy"):
         with open(filename, "r", encoding="utf-8") as f:
@@ -154,7 +154,7 @@ def process_directory(input_dir, output_dir, files, patchilizer, model, accelera
 
     # process the files
     for file in tqdm(files_to_process):
-        file_name = os.path.basename(file)
+        file_name = os.path.splitext(os.path.basename(file))[0]
         if (output_dir is not None):
             output_subdir = output_dir + os.path.dirname(file)[len(input_dir):]
             try:
@@ -172,8 +172,10 @@ def process_directory(input_dir, output_dir, files, patchilizer, model, accelera
         try:
             with torch.no_grad():
                 features = extract_feature(file, patchilizer, model, device).unsqueeze(0)
-                results[file_name] = features.detach().cpu().numpy()
+                
+                results[file_name] = {'embeddings': features.detach().cpu().numpy()}
             if (output_dir is not None):
+                # TODO: Should we save it with "midi" sufix
                 np.save(output_file, features.detach().cpu().numpy())
         except Exception as e:
             print(f"Failed to process {file}: {e}")
