@@ -23,6 +23,12 @@ class EmbeddingComparator:
         self.output_dir = output_dir
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
+    def pad_to_length(self, arr, target_length):
+        if len(arr) >= target_length:
+            return arr[:target_length]  # przycięcie (opcjonalne)
+        padding = np.zeros(target_length - len(arr))
+        return np.concatenate([arr, padding])
+
     def compute_similarities(self, audio_embeddings: Dict[str, np.ndarray],
                              symbolic_embeddings: Dict[str, np.ndarray]) -> Dict[str, float]:
         """
@@ -45,11 +51,12 @@ class EmbeddingComparator:
                 # Get embeddings
                 audio_emb = audio_embeddings[filename]
                 symbolic_emb = symbolic_embeddings[filename]
-
                 # Flatten embeddings if they're not 1D
                 audio_emb = audio_emb.flatten()
                 symbolic_emb = symbolic_emb.flatten()
-
+                max_len = max(len(audio_emb), len(symbolic_emb))
+                audio_emb = self.pad_to_length(audio_emb, max_len)
+                symbolic_emb =self.pad_to_length(symbolic_emb, max_len)
                 # Compute cosine similarity
                 similarity = cosine_similarity(
                     audio_emb.reshape(1, -1),
@@ -89,8 +96,10 @@ class EmbeddingComparator:
             try:
                 audio_emb = audio_embeddings[filename].flatten()
                 symbolic_emb = symbolic_embeddings[filename].flatten()
-
                 if len(audio_emb) > 0 and len(symbolic_emb) > 0:
+                    max_len = max(len(audio_emb), len(symbolic_emb))
+                    audio_emb = self.pad_to_length(audio_emb, max_len)
+                    symbolic_emb = self.pad_to_length(symbolic_emb, max_len)
                     all_embeddings.append(audio_emb)
                     labels.append(f"{filename}_audio")
                     types.append('audio')
@@ -114,7 +123,7 @@ class EmbeddingComparator:
         X_pca = pca.fit_transform(X)
 
         # Apply t-SNE
-        tsne = TSNE(n_components=2, random_state=42)
+        tsne = TSNE(n_components=2, random_state=42, perplexity=min(30, len(X) - 1))
         X_tsne = tsne.fit_transform(X)
 
         # Plot results
