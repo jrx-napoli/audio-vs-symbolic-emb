@@ -2,8 +2,10 @@ import re
 import os
 import torch 
 import random
-from .config import *
+from config import *
 from unidecode import unidecode
+import os
+os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 from torch.nn import functional as F
 from transformers import AutoModel, BertModel, GPT2LMHeadModel, PreTrainedModel, GPT2Config
 
@@ -342,73 +344,6 @@ class CLaMP3Model(PreTrainedModel):
             self.symbolic_model = model.encoder
             model = None
             print(f"Successfully Loaded M3 Checkpoint from Epoch {checkpoint['epoch']} with loss {checkpoint['min_eval_loss']}")
-        
-    def set_trainable(self, freeze_list):
-        if "text_model" in freeze_list:
-            self.text_model.eval()
-            for param in self.text_model.parameters():
-                param.requires_grad = False
-            print("Text Model Frozen")
-        else:
-            self.text_model.train()
-            for param in self.text_model.parameters():
-                param.requires_grad = True
-            print("Text Model Training")
-
-        if "text_proj" in freeze_list:
-            self.text_proj.eval()
-            for param in self.text_proj.parameters():
-                param.requires_grad = False
-            print("Text Projection Layer Frozen")
-        else:
-            self.text_proj.train()
-            for param in self.text_proj.parameters():
-                param.requires_grad = True
-            print("Text Projection Layer Training")
-
-        if "symbolic_model" in freeze_list:
-            self.symbolic_model.eval()
-            for param in self.symbolic_model.parameters():
-                param.requires_grad = False
-            print("Symbolic Model Frozen")
-        else:
-            self.symbolic_model.train()
-            for param in self.symbolic_model.parameters():
-                param.requires_grad = True
-            print("Symbolic Model Training")
-
-        if "symbolic_proj" in freeze_list:
-            self.symbolic_proj.eval()
-            for param in self.symbolic_proj.parameters():
-                param.requires_grad = False
-            print("Symbolic Projection Layer Frozen")
-        else:
-            self.symbolic_proj.train()
-            for param in self.symbolic_proj.parameters():
-                param.requires_grad = True
-            print("Symbolic Projection Layer Training")
-
-        if "audio_model" in freeze_list:
-            self.audio_model.eval()
-            for param in self.audio_model.parameters():
-                param.requires_grad = False
-            print("Audio Model Frozen")
-        else:
-            self.audio_model.train()
-            for param in self.audio_model.parameters():
-                param.requires_grad = True
-            print("Audio Model Training")
-
-        if "audio_proj" in freeze_list:
-            self.audio_proj.eval()
-            for param in self.audio_proj.parameters():
-                param.requires_grad = False
-            print("Audio Projection Layer Frozen")
-        else:
-            self.audio_proj.train()
-            for param in self.audio_proj.parameters():
-                param.requires_grad = True
-            print("Audio Projection Layer Training")
 
     def avg_pooling(self, input_features, input_masks):
         input_masks = input_masks.unsqueeze(-1).to(self.device) # add a dimension to match the feature dimension

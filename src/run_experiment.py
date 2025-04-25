@@ -49,79 +49,20 @@ class ExperimentRunner:
         self.results = {
             'audio_embeddings': {},
             'symbolic_embeddings': {},
-            'similarities': {},
-            'metadata': {}
+            'similarities': {}
         }
 
-    def process_data(self) -> None:
-        """Process raw data into a standardized format."""
-        logger.info("Processing data...")
+    def load_embeddings(self) -> None:
+        logger.info("Loading embeddings...")
 
-        # Process audio files
-        audio_features = self.audio_processor.process_directory(
-            self.raw_dir / 'audio'
-        )
-        self.results['audio_embeddings'] = audio_features
+        try:
+            data = np.load(self.embeddings_dir / 'embeddings.npz', allow_pickle=True)
+            self.results['audio_embeddings'] = data['audio_embeddings'].item()
+            self.results['symbolic_embeddings'] = data['symbolic_embeddings'].item()
+        except Exception as e:
+            logger.error(f"Did not find files with embeddings. More info: {str(e)}")
+            raise
 
-        # Process MIDI files
-        symbolic_features = self.symbolic_processor.process_directory(
-            self.raw_dir / 'midi',
-            self.processed_dir / 'symbolic'
-        )
-        self.results['symbolic_embeddings'] = symbolic_features
-
-    def generate_embeddings(self) -> None:
-        """Generate embeddings for both audio and symbolic formats."""
-        logger.info("Generating embeddings...")
-
-        # For now, we'll use the processed features as embeddings
-        # In the future, we can add more sophisticated embedding generation
-        audio_embeddings = {}
-        symbolic_embeddings = {}
-
-        # Process audio embeddings
-        for k, v in self.results['audio_embeddings'].items():
-            try:
-                if 'embeddings' in v:
-                    # Average OpenL3 embeddings over time
-                    audio_embeddings[k] = np.mean(v['embeddings'], axis=0)
-                else:
-                    logger.warning(f"No embeddings found for {k}")
-            except Exception as e:
-                logger.error(f"Error processing audio embedding for {k}: {str(e)}")
-
-        # Process symbolic embeddings
-        # First collect all piano rolls to fit PCA
-        all_piano_rolls = []
-        valid_keys = []
-        for k, v in self.results['symbolic_embeddings'].items():
-            try:
-                if 'embeddings' in v:
-                    symbolic_embeddings[k] = np.mean(v['embeddings'], axis=0)
-                else:
-                    logger.warning(f"No embeddings found for {k}")
-            except Exception as e:
-                logger.error(f"Error processing symbolic embedding for {k}: {str(e)}")
-
-        if all_piano_rolls:
-            # Fit PCA on all piano rolls
-            pca = PCA(n_components=512)  # Match OpenL3 embedding size
-            pca.fit(np.array(all_piano_rolls))
-            
-            # Transform each piano roll
-            for k, piano_roll in zip(valid_keys, all_piano_rolls):
-                symbolic_embeddings[k] = pca.transform(piano_roll.reshape(1, -1))[0]
-
-        # Validate embeddings
-        if not audio_embeddings:
-            raise ValueError("No valid audio embeddings generated")
-        if not symbolic_embeddings:
-            raise ValueError("No valid symbolic embeddings generated")
-
-        self.results['audio_embeddings'] = audio_embeddings
-        self.results['symbolic_embeddings'] = symbolic_embeddings
-
-        logger.info(f"Generated {len(audio_embeddings)} audio embeddings and {len(symbolic_embeddings)} symbolic embeddings")
 
     def compute_similarities(self) -> None:
         """Compute similarity metrics between embeddings."""
@@ -152,15 +93,8 @@ class ExperimentRunner:
         """Save all experiment results."""
         logger.info("Saving results...")
 
-        # Save embeddings
-        np.save(self.embeddings_dir / 'audio_embeddings.npy', self.results['audio_embeddings'])
-        np.save(self.embeddings_dir / 'symbolic_embeddings.npy', self.results['symbolic_embeddings'])
-
         # Save similarities
         np.save(self.output_dir / 'similarities.npy', self.results['similarities'])
-
-        # Save metadata
-        pd.DataFrame(self.results['metadata']).to_csv(self.output_dir / 'metadata.csv')
 
         logger.info(f"Results saved to {self.output_dir}")
 
@@ -169,8 +103,7 @@ class ExperimentRunner:
         logger.info(f"Starting experiment for dataset: {self.dataset_name}")
 
         try:
-            self.process_data()
-            self.generate_embeddings()
+            self.load_embeddings()
             self.compute_similarities()
             self.analyze_results()
             self.save_results()
@@ -188,8 +121,6 @@ def main():
                         help='Name of the dataset to process (e.g., GiantMIDI-PIano)')
     parser.add_argument('--output_dir', type=str, default='results',
                         help='Directory to save experiment results')
-    parser.add_argument('--force', action='store_true',
-                        help='Force reprocessing even if results exist')
 
     args = parser.parse_args()
 

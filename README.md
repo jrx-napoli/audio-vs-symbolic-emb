@@ -41,7 +41,7 @@ The project includes a tool for converting MIDI files to audio format using a cu
 
 #### Usage:
 ```bash
-python src/utils/midi_to_audio.py --input_dir data/raw/midi --output_dir data/raw/audio
+python src/utils/midi_to_audio.py --input_dir data/raw/GiantMIDI-PIano/midi --output_dir data/raw/GiantMIDI-PIano/audio
 ```
 
 Parameters:

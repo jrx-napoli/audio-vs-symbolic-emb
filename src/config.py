@@ -1,14 +1,9 @@
-EVAL_SPLIT = 0.01  # Fraction of training data used for evaluation
-WANDB_KEY = "<YOUR_WANDB_KEY>"  # Weights and Biases API key
+INPUT_REPR = "mel256" # mel256, mel128 or linear
+CONTENT_TYPE = "music" # music or env
+EMBEDDING_SIZE = 512; #512 or 8192 
+HOP_SIZE = 0.1 # From 0.1 to 0.5
 
 # -------------------- Configuration for M3 Training --------------------
-M3_TRAIN_FOLDERS = [
-    "<YOUR_TRAINING_DATA_FOLDER>"  # Directory containing training data for M3
-]
-
-M3_EVAL_FOLDERS = [
-    "<YOUR_EVALUATION_DATA_FOLDER>"  # Directory containing evaluation data for M3 (optional)
-]
 
 PATCH_SIZE = 64  # Size of each patch
 PATCH_LENGTH = 512  # Length of the patches
@@ -38,8 +33,6 @@ M3_WEIGHTS_PATH = (
 M3_LOGS_PATH = M3_WEIGHTS_PATH.replace("weights", "logs").replace("pth", "txt")  # Path to save training logs
 
 # -------------------- Configuration for CLaMP3 Training ----------------
-CLAMP3_TRAIN_JSONL = "<YOUR_TRAINING_JSONL_FILE>"  # Path to the JSONL file with training data for CLaMP3
-CLAMP3_EVAL_JSONL = "<YOUR_EVALUATION_JSONL_FILE>"  # Path to the JSONL file with evaluation data for CLaMP3 (optional)
 
 CLAMP3_HIDDEN_SIZE = 768  # Size of the hidden layer
 TEXT_MODEL_NAME = "FacebookAI/xlm-roberta-base"  # Name of the pre-trained text model
@@ -76,4 +69,3 @@ CLAMP3_WEIGHTS_PATH = (
     "_p_length_" + str(PATCH_LENGTH) + ".pth"
 
 )  # Path to store CLaMP3 model weights
-CLAMP3_LOGS_PATH = CLAMP3_WEIGHTS_PATH.replace("weights", "logs").replace("pth", "txt")  # Path to save training logs

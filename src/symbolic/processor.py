@@ -1,14 +1,15 @@
 import os
 import sys
-from .tools import contains_midi_files, run_command, remove_folder
+from tools import remove_folder
 from .midi2mtf import midi_2_mtf
 from pathlib import Path
 from typing import Dict
 
 import numpy as np
 from typing import Dict
-import logging
+
 from .extract_clamp3 import extract_features
+import logging
 logger = logging.getLogger(__name__)
 
 
@@ -21,10 +22,10 @@ class SymbolicProcessor:
 
         # Step 2: Determine modalities automatically
         if not  (input_dir):
-            print(f'Error: Could not determine input modality for "{input_dir}"')
+            logger.error(f'Error: Could not determine input modality for "{input_dir}"')
             sys.exit(1)
 
-        print(f'Detected input modality. ')
+        logger.info(f'Detected input modality. ')
 
         # Step 3: Extract features based on detected modality
         
@@ -51,8 +52,6 @@ def extract_mid_features(mid_dir, feat_dir, global_flag=True) -> Dict[str, Dict[
     # Step 3: Run extract_clamp3.py
     if feat_dir is None:
         return extract_features("./temp/mtf", "../cache/mid_features")
-        # return run_command(f'python extract_clamp3.py ./temp/mtf ../cache/mid_features{global_flag}')
     else:
         feat_dir = os.path.abspath(feat_dir)
         return extract_features("./temp/mtf", feat_dir)
-        # return run_command(f'python extract_clamp3.py ./temp/mtf "{feat_dir}"{global_flag}')

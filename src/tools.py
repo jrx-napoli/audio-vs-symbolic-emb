@@ -3,7 +3,7 @@ import sys
 import shutil
 import subprocess
 import os
-from .config import *
+from config import *
 
 def contains_midi_files(directory):
     '''Check if the directory (recursively) contains any MIDI files (.mid or .midi).'''
@@ -20,16 +20,6 @@ def contains_midi_files(directory):
                 return True
 
     return False
-
-def run_command(command):
-    '''Execute a command and handle errors.'''
-    print(f'Executing: "{command}"')
-    try:
-        subprocess.run(command, shell=True, check=True)
-        print(f'Successfully executed: "{command}"')
-    except subprocess.CalledProcessError as e:
-        print(f'Error executing command: "{command}"\n{e}')
-        sys.exit(1)
 
 def remove_folder(folder):
     '''Cross-platform folder deletion.'''

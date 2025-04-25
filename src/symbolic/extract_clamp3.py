@@ -1,8 +1,9 @@
 import os
+os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 import torch
 import numpy as np
 from tqdm import tqdm
-from .config import *
+from config import *
 from utils import *
 from .CLaMP3Model import *
 from samplings import *
@@ -10,13 +11,14 @@ from accelerate import Accelerator
 from transformers import BertConfig, AutoTokenizer
 import requests
 from typing import Dict
-
+import logging
+logger = logging.getLogger(__name__)
 
 def extract_features(input_dir, output_dir=None) -> Dict[str, Dict[str, np.ndarray]]:
     files = []
     input_dir = os.path.abspath(input_dir)
 
-    for root, dirs, fs in os.walk(input_dir):
+    for root, _, fs in os.walk(input_dir):
         for f in fs:
             if f.endswith(".mtf") :
                 files.append(os.path.join(root, f))

@@ -5,6 +5,7 @@ from typing import Dict, Tuple
 import numpy as np
 import openl3
 import soundfile as sf
+from config import * 
 
 logger = logging.getLogger(__name__)
 
@@ -22,9 +23,9 @@ class AudioProcessor:
 
         # Initialize OpenL3 model
         self.model = openl3.models.load_audio_embedding_model(
-            input_repr="mel256",
-            content_type="music",
-            embedding_size=512
+            input_repr=INPUT_REPR,
+            content_type=CONTENT_TYPE,
+            embedding_size=EMBEDDING_SIZE
         )
 
     def load_audio(self, file_path: Path) -> Tuple[np.ndarray, int]:
@@ -64,7 +65,7 @@ class AudioProcessor:
                 sr,
                 model=self.model,
                 center=True,
-                hop_size=0.1,
+                hop_size=HOP_SIZE,
                 batch_size=32
             )
 
@@ -115,7 +116,6 @@ class AudioProcessor:
             Dictionary mapping filenames to their features
         """
         results = {}
-
         # Get all audio files
         audio_files = list(input_dir.glob('*.wav')) + list(input_dir.glob('*.mp3'))
 
