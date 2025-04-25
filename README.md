@@ -55,7 +55,7 @@ The conversion process:
 3. Applies proper envelope shaping and dynamics
 4. Saves the result as high-quality WAV files
 
-### GenerateEmbeddings
+### Generate Embeddings
 
 The project generates and saves embeddings for audio and symbolic presentation.
 
