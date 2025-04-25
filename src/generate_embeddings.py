@@ -15,7 +15,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-class CreateEmbeddings:
+class GenerateEmbeddings:
     def __init__(self, dataset_name: str):
         """
         Initialize the experiment runner.
@@ -142,7 +142,7 @@ def main():
 
     args = parser.parse_args()
 
-    runner = CreateEmbeddings(args.dataset)
+    runner = GenerateEmbeddings(args.dataset)
     runner.run()
 
 

@@ -55,6 +55,18 @@ The conversion process:
 3. Applies proper envelope shaping and dynamics
 4. Saves the result as high-quality WAV files
 
+### GenerateEmbeddings
+
+The project generates and saves embeddings for audio and symbolic presentation.
+
+#### Usage:
+```bash
+python src/generate_embeddings.py --dataset GiantMIDI-PIano 
+```
+
+Parameters:
+- `--dataset`: Name of the dataset to process (e.g., 'GiantMIDI-PIano')
+
 ### Running Experiments
 
 The project includes a comprehensive experiment runner for comparing audio and symbolic embeddings.
@@ -67,31 +79,23 @@ python src/run_experiment.py --dataset GiantMIDI-PIano --output_dir results
 Parameters:
 - `--dataset`: Name of the dataset to process (e.g., 'GiantMIDI-PIano')
 - `--output_dir`: Directory to save experiment results (default: 'results')
-- `--force`: Force reprocessing even if results exist
+
 
 The experiment pipeline:
-1. **Data Processing**
-   - Processes audio files to extract features (mel spectrograms, MFCCs, chroma)
-   - Processes MIDI files to extract features (piano roll, note features, tempo)
-   - Saves processed features in standardized format
+1. **Loading embeddings**
+   - Loads previously generated embeddings
 
-2. **Embedding Generation**
-   - Generates embeddings from processed features
-   - Audio embeddings: mel spectrogram-based
-   - Symbolic embeddings: piano roll-based
-
-3. **Similarity Analysis**
+2. **Similarity Analysis**
    - Computes cosine similarity between audio and symbolic embeddings
    - Generates visualizations (PCA, t-SNE)
    - Performs statistical analysis
 
-4. **Results**
-   - Saves embeddings and similarity scores
+3. **Results**
+   - Saves similarity scores
    - Generates visualizations and statistics
    - Creates comprehensive analysis reports
 
 Output files:
-- `embeddings/`: Contains audio and symbolic embeddings
 - `similarities.npy`: Similarity scores between embeddings
 - `statistics.txt`: Statistical analysis results
 - `embedding_visualization.png`: PCA and t-SNE plots
