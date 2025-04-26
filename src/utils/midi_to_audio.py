@@ -1,8 +1,13 @@
-import pretty_midi
-import numpy as np
-import soundfile as sf
 from pathlib import Path
+
+import numpy as np
+import pretty_midi
+import soundfile as sf
 from tqdm import tqdm
+
+from utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 def create_piano_note(frequency, duration, amplitude, sample_rate=44100):
@@ -37,7 +42,7 @@ def create_piano_note(frequency, duration, amplitude, sample_rate=44100):
     envelope[:attack_samples] = np.linspace(0, 1, attack_samples)
     # Decay to sustain
     decay_curve = np.linspace(1, sustain_level, decay_samples)
-    envelope[attack_samples:attack_samples + decay_samples] = decay_curve
+    envelope[attack_samples : attack_samples + decay_samples] = decay_curve
     # Release
     release_start = len(envelope) - release_samples
     release_curve = np.linspace(sustain_level, 0, release_samples)
@@ -61,7 +66,9 @@ def midi_to_audio(midi_path: str, output_path: str, sample_rate: int = 44100) ->
     midi_data = pretty_midi.PrettyMIDI(midi_path)
 
     # Initialize output audio
-    duration = int(midi_data.get_end_time() * sample_rate) + sample_rate  # Add 1 second padding
+    duration = (
+        int(midi_data.get_end_time() * sample_rate) + sample_rate
+    )  # Add 1 second padding
     audio = np.zeros(duration)
 
     # Process each instrument
@@ -86,10 +93,14 @@ def midi_to_audio(midi_path: str, output_path: str, sample_rate: int = 44100) ->
                 velocity = 30 + (velocity - 30) * 0.7
 
             # Normalize velocity to amplitude (0.0 to 1.0)
-            amplitude = (velocity / 127.0) * 0.8  # Reduce max amplitude to 0.8 to prevent clipping
+            amplitude = (
+                velocity / 127.0
+            ) * 0.8  # Reduce max amplitude to 0.8 to prevent clipping
 
             # Generate note
-            note_audio = create_piano_note(frequency, note_duration + 0.5, amplitude, sample_rate)
+            note_audio = create_piano_note(
+                frequency, note_duration + 0.5, amplitude, sample_rate
+            )
 
             # Add note to the output at the correct time position
             start_idx = int(note.start * sample_rate)
@@ -97,10 +108,10 @@ def midi_to_audio(midi_path: str, output_path: str, sample_rate: int = 44100) ->
 
             # Ensure we don't exceed audio buffer
             if end_idx > len(audio):
-                note_audio = note_audio[:len(audio) - start_idx]
+                note_audio = note_audio[: len(audio) - start_idx]
                 end_idx = len(audio)
 
-            audio[start_idx:end_idx] += note_audio[:end_idx - start_idx]
+            audio[start_idx:end_idx] += note_audio[: end_idx - start_idx]
 
     # Normalize final audio
     max_val = np.max(np.abs(audio))
@@ -118,7 +129,9 @@ def midi_to_audio(midi_path: str, output_path: str, sample_rate: int = 44100) ->
     sf.write(output_path, audio, sample_rate)
 
 
-def convert_directory(input_dir: str, output_dir: str, sample_rate: int = 44100) -> None:
+def convert_directory(
+    input_dir: str, output_dir: str, sample_rate: int = 44100
+) -> None:
     """
     Convert all MIDI files in a directory to audio files.
     """
@@ -127,10 +140,10 @@ def convert_directory(input_dir: str, output_dir: str, sample_rate: int = 44100)
     output_path.mkdir(parents=True, exist_ok=True)
 
     # Get all MIDI files
-    midi_files = list(input_path.glob('*.mid')) + list(input_path.glob('*.midi'))
+    midi_files = list(input_path.glob("*.mid")) + list(input_path.glob("*.midi"))
 
     if not midi_files:
-        print(f"No MIDI files found in {input_dir}")
+        logger.warning(f"No MIDI files found in {input_dir}")
         return
 
     # Convert each file
@@ -138,18 +151,26 @@ def convert_directory(input_dir: str, output_dir: str, sample_rate: int = 44100)
         output_file = output_path / f"{midi_file.stem}.wav"
         try:
             midi_to_audio(str(midi_file), str(output_file), sample_rate)
-            print(f"Successfully converted {midi_file.name} to {output_file.name}")
+            logger.info(
+                f"Successfully converted {midi_file.name} to {output_file.name}"
+            )
         except Exception as e:
-            print(f"Error converting {midi_file.name}: {str(e)}")
+            logger.error(f"Error converting {midi_file.name}: {str(e)}")
 
 
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description='Convert MIDI files to audio files')
-    parser.add_argument('--input_dir', type=str, required=True, help='Directory containing MIDI files')
-    parser.add_argument('--output_dir', type=str, required=True, help='Directory to save audio files')
-    parser.add_argument('--sample_rate', type=int, default=44100, help='Sample rate for output audio')
+    parser = argparse.ArgumentParser(description="Convert MIDI files to audio files")
+    parser.add_argument(
+        "--input_dir", type=str, required=True, help="Directory containing MIDI files"
+    )
+    parser.add_argument(
+        "--output_dir", type=str, required=True, help="Directory to save audio files"
+    )
+    parser.add_argument(
+        "--sample_rate", type=int, default=44100, help="Sample rate for output audio"
+    )
 
     args = parser.parse_args()
     convert_directory(args.input_dir, args.output_dir, args.sample_rate)

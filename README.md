@@ -9,13 +9,12 @@ This project analyzes the similarities between embeddings of symbolic music (e.g
 │   ├── raw/                # Raw audio and symbolic music files
 │   ├── processed/          # Processed data ready for analysis
 │   └── embeddings/         # Generated embeddings
-├── notebooks/              # Jupyter notebooks for analysis
+├── logs/                   # Error logs from transforming midi files
 ├── src/                    # Source code
 │   ├── audio/             # Audio processing and embedding extraction
 │   ├── symbolic/          # Symbolic music processing and embedding extraction
 │   ├── analysis/          # Analysis tools and similarity metrics
 │   └── utils/             # Utility functions
-├── configs/                # Configuration files
 ├── requirements.txt        # Python dependencies
 └── README.md              # This file
 ```

@@ -1,13 +1,20 @@
-import re
 import os
-import torch 
 import random
-from config import *
+import re
+
+import torch
 from unidecode import unidecode
-import os
-os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
+
+from config import *
+
+os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 from torch.nn import functional as F
-from transformers import AutoModel, BertModel, GPT2LMHeadModel, PreTrainedModel, GPT2Config
+from transformers import (AutoModel, BertModel, GPT2Config, GPT2LMHeadModel,
+                          PreTrainedModel)
+
+from utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 try:
     import torch.distributed.nn
@@ -16,16 +23,17 @@ try:
     has_distributed = True
 except ImportError:
     has_distributed = False
-   
+
+
 class ClipLoss(torch.nn.Module):
 
     def __init__(
-            self,
-            local_loss=False,
-            gather_with_grad=False,
-            cache_labels=False,
-            rank=0,
-            world_size=1
+        self,
+        local_loss=False,
+        gather_with_grad=False,
+        cache_labels=False,
+        rank=0,
+        world_size=1,
     ):
         super().__init__()
         self.local_loss = local_loss
@@ -39,22 +47,30 @@ class ClipLoss(torch.nn.Module):
         self.labels = {}
 
     def gather_features(
-            self,
-            image_features,
-            text_features,
-            local_loss=False,
-            gather_with_grad=False,
-            rank=0,
-            world_size=1
+        self,
+        image_features,
+        text_features,
+        local_loss=False,
+        gather_with_grad=False,
+        rank=0,
+        world_size=1,
     ):
 
         # We gather tensors from all gpus
         if gather_with_grad:
-            all_image_features = torch.cat(torch.distributed.nn.all_gather(image_features), dim=0)
-            all_text_features = torch.cat(torch.distributed.nn.all_gather(text_features), dim=0)
+            all_image_features = torch.cat(
+                torch.distributed.nn.all_gather(image_features), dim=0
+            )
+            all_text_features = torch.cat(
+                torch.distributed.nn.all_gather(text_features), dim=0
+            )
         else:
-            gathered_image_features = [torch.zeros_like(image_features) for _ in range(world_size)]
-            gathered_text_features = [torch.zeros_like(text_features) for _ in range(world_size)]
+            gathered_image_features = [
+                torch.zeros_like(image_features) for _ in range(world_size)
+            ]
+            gathered_text_features = [
+                torch.zeros_like(text_features) for _ in range(world_size)
+            ]
             dist.all_gather(gathered_image_features, image_features)
             dist.all_gather(gathered_text_features, text_features)
             if not local_loss:
@@ -82,70 +98,82 @@ class ClipLoss(torch.nn.Module):
     def get_logits(self, image_features, text_features, logit_scale):
         if self.world_size > 1:
             all_image_features, all_text_features = self.gather_features(
-                image_features, text_features,
-                self.local_loss, self.gather_with_grad, self.rank, self.world_size)
+                image_features,
+                text_features,
+                self.local_loss,
+                self.gather_with_grad,
+                self.rank,
+                self.world_size,
+            )
 
             if self.local_loss:
                 logits_per_image = logit_scale * image_features @ all_text_features.T
                 logits_per_text = logit_scale * text_features @ all_image_features.T
             else:
-                logits_per_image = logit_scale * all_image_features @ all_text_features.T
+                logits_per_image = (
+                    logit_scale * all_image_features @ all_text_features.T
+                )
                 logits_per_text = logits_per_image.T
         else:
             logits_per_image = logit_scale * image_features @ text_features.T
             logits_per_text = logit_scale * text_features @ image_features.T
-        
+
         return logits_per_image, logits_per_text
 
     def forward(self, image_features, text_features, logit_scale, output_dict=False):
         device = image_features.device
-        logits_per_image, logits_per_text = self.get_logits(image_features, text_features, logit_scale)
+        logits_per_image, logits_per_text = self.get_logits(
+            image_features, text_features, logit_scale
+        )
 
         labels = self.get_ground_truth(device, logits_per_image.shape[0])
 
         total_loss = (
-            F.cross_entropy(logits_per_image, labels) +
-            F.cross_entropy(logits_per_text, labels)
+            F.cross_entropy(logits_per_image, labels)
+            + F.cross_entropy(logits_per_text, labels)
         ) / 2
 
         return {"contrastive_loss": total_loss} if output_dict else total_loss
 
+
 class M3Patchilizer:
     def __init__(self):
         self.delimiters = ["|:", "::", ":|", "[|", "||", "|]", "|"]
-        self.regexPattern = '(' + '|'.join(map(re.escape, self.delimiters)) + ')'
+        self.regexPattern = "(" + "|".join(map(re.escape, self.delimiters)) + ")"
         self.pad_token_id = 0
         self.bos_token_id = 1
         self.eos_token_id = 2
         self.mask_token_id = 3
 
     def split_bars(self, body):
-        bars = re.split(self.regexPattern, ''.join(body))
+        bars = re.split(self.regexPattern, "".join(body))
         bars = list(filter(None, bars))  # remove empty strings
         if bars[0] in self.delimiters:
             bars[1] = bars[0] + bars[1]
             bars = bars[1:]
         bars = [bars[i * 2] + bars[i * 2 + 1] for i in range(len(bars) // 2)]
         return bars
-    
+
     def bar2patch(self, bar, patch_size=PATCH_SIZE):
         patch = [self.bos_token_id] + [ord(c) for c in bar] + [self.eos_token_id]
         patch = patch[:patch_size]
         patch += [self.pad_token_id] * (patch_size - len(patch))
         return patch
-    
-    def patch2bar(self, patch):
-        return ''.join(chr(idx) if idx > self.mask_token_id else '' for idx in patch)
 
-    def encode(self,
-               item,
-               patch_size=PATCH_SIZE,
-               add_special_patches=False,
-               truncate=False,
-               random_truncate=False):
+    def patch2bar(self, patch):
+        return "".join(chr(idx) if idx > self.mask_token_id else "" for idx in patch)
+
+    def encode(
+        self,
+        item,
+        patch_size=PATCH_SIZE,
+        add_special_patches=False,
+        truncate=False,
+        random_truncate=False,
+    ):
         item = item.replace("L:1/8\n", "")
         item = unidecode(item)
-        lines = re.findall(r'.*?\n|.*$', item)
+        lines = re.findall(r".*?\n|.*$", item)
         lines = list(filter(None, lines))  # remove empty lines
 
         patches = []
@@ -153,24 +181,28 @@ class M3Patchilizer:
         if lines[0].split(" ")[0] == "ticks_per_beat":
             patch = ""
             for line in lines:
-                if patch.startswith(line.split(" ")[0]) and (len(patch) + len(" ".join(line.split(" ")[1:])) <= patch_size-2):
+                if patch.startswith(line.split(" ")[0]) and (
+                    len(patch) + len(" ".join(line.split(" ")[1:])) <= patch_size - 2
+                ):
                     patch = patch[:-1] + "\t" + " ".join(line.split(" ")[1:])
                 else:
                     if patch:
                         patches.append(patch)
                     patch = line
-            if patch!="":
+            if patch != "":
                 patches.append(patch)
         else:
             for line in lines:
-                if len(line) > 1 and ((line[0].isalpha() and line[1] == ':') or line.startswith('%%')):
+                if len(line) > 1 and (
+                    (line[0].isalpha() and line[1] == ":") or line.startswith("%%")
+                ):
                     patches.append(line)
                 else:
                     bars = self.split_bars(line)
                     if bars:
-                        bars[-1] += '\n'
+                        bars[-1] += "\n"
                         patches.extend(bars)
-        
+
         if add_special_patches:
             bos_patch = chr(self.bos_token_id) * patch_size
             eos_patch = chr(self.eos_token_id) * patch_size
@@ -179,44 +211,48 @@ class M3Patchilizer:
         if len(patches) > PATCH_LENGTH and truncate:
             choices = ["head", "tail", "middle"]
             choice = random.choice(choices)
-            if choice=="head" or random_truncate==False:
+            if choice == "head" or random_truncate == False:
                 patches = patches[:PATCH_LENGTH]
-            elif choice=="tail":
+            elif choice == "tail":
                 patches = patches[-PATCH_LENGTH:]
             else:
-                start = random.randint(1, len(patches)-PATCH_LENGTH)
-                patches = patches[start:start+PATCH_LENGTH]
+                start = random.randint(1, len(patches) - PATCH_LENGTH)
+                patches = patches[start : start + PATCH_LENGTH]
 
         patches = [self.bar2patch(patch) for patch in patches]
 
         return patches
 
     def decode(self, patches):
-        return ''.join(self.patch2bar(patch) for patch in patches)
+        return "".join(self.patch2bar(patch) for patch in patches)
+
 
 class M3PatchEncoder(PreTrainedModel):
     def __init__(self, config):
         super(M3PatchEncoder, self).__init__(config)
-        self.patch_embedding = torch.nn.Linear(PATCH_SIZE*128, M3_HIDDEN_SIZE)
+        self.patch_embedding = torch.nn.Linear(PATCH_SIZE * 128, M3_HIDDEN_SIZE)
         torch.nn.init.normal_(self.patch_embedding.weight, std=0.02)
         self.base = BertModel(config=config)
         self.pad_token_id = 0
         self.bos_token_id = 1
         self.eos_token_id = 2
         self.mask_token_id = 3
-        
-    def forward(self,
-                input_patches, # [batch_size, seq_length, hidden_size]
-                input_masks):  # [batch_size, seq_length]
+
+    def forward(
+        self, input_patches, input_masks  # [batch_size, seq_length, hidden_size]
+    ):  # [batch_size, seq_length]
         # Transform input_patches into embeddings
         input_patches = torch.nn.functional.one_hot(input_patches, num_classes=128)
-        input_patches = input_patches.reshape(len(input_patches), -1, PATCH_SIZE*128).type(torch.FloatTensor)
+        input_patches = input_patches.reshape(
+            len(input_patches), -1, PATCH_SIZE * 128
+        ).type(torch.FloatTensor)
         input_patches = self.patch_embedding(input_patches.to(self.device))
 
         # Apply BERT model to input_patches and input_masks
         return self.base(inputs_embeds=input_patches, attention_mask=input_masks)
 
-class M3TokenDecoder(PreTrainedModel):    
+
+class M3TokenDecoder(PreTrainedModel):
     def __init__(self, config):
         super(M3TokenDecoder, self).__init__(config)
         self.base = GPT2LMHeadModel(config=config)
@@ -224,15 +260,19 @@ class M3TokenDecoder(PreTrainedModel):
         self.bos_token_id = 1
         self.eos_token_id = 2
         self.mask_token_id = 3
-        
-    def forward(self,
-                patch_features,  # [batch_size, hidden_size]
-                target_patches): # [batch_size, seq_length]
+
+    def forward(
+        self, patch_features, target_patches  # [batch_size, hidden_size]
+    ):  # [batch_size, seq_length]
         # get input embeddings
-        inputs_embeds = torch.nn.functional.embedding(target_patches, self.base.transformer.wte.weight)
+        inputs_embeds = torch.nn.functional.embedding(
+            target_patches, self.base.transformer.wte.weight
+        )
 
         # concatenate the encoded patches with the input embeddings
-        inputs_embeds = torch.cat((patch_features.unsqueeze(1), inputs_embeds[:,1:,:]), dim=1)
+        inputs_embeds = torch.cat(
+            (patch_features.unsqueeze(1), inputs_embeds[:, 1:, :]), dim=1
+        )
 
         # preparing the labels for model training
         target_masks = target_patches == self.pad_token_id
@@ -242,13 +282,13 @@ class M3TokenDecoder(PreTrainedModel):
         target_masks = ~target_masks
         target_masks = target_masks.type(torch.int)
 
-        return self.base(inputs_embeds=inputs_embeds,
-                         attention_mask=target_masks,
-                         labels=target_patches)
-        
-    def generate(self,
-                 patch_feature,
-                 tokens):
+        return self.base(
+            inputs_embeds=inputs_embeds,
+            attention_mask=target_masks,
+            labels=target_patches,
+        )
+
+    def generate(self, patch_feature, tokens):
         # reshape the patch_feature and tokens
         patch_feature = patch_feature.reshape(1, 1, -1)
         tokens = tokens.reshape(1, -1)
@@ -257,15 +297,16 @@ class M3TokenDecoder(PreTrainedModel):
         tokens = torch.nn.functional.embedding(tokens, self.base.transformer.wte.weight)
 
         # concatenate the encoded patches with the input embeddings
-        tokens = torch.cat((patch_feature, tokens[:,1:,:]), dim=1)
-        
+        tokens = torch.cat((patch_feature, tokens[:, 1:, :]), dim=1)
+
         # get the outputs from the model
         outputs = self.base(inputs_embeds=tokens)
-        
+
         # get the probabilities of the next token
         probs = torch.nn.functional.softmax(outputs.logits.squeeze(0)[-1], dim=-1)
 
         return probs.detach().cpu().numpy()
+
 
 class M3Model(PreTrainedModel):
     def __init__(self, encoder_config, decoder_config):
@@ -276,139 +317,175 @@ class M3Model(PreTrainedModel):
         self.bos_token_id = 1
         self.eos_token_id = 2
         self.mask_token_id = 3
-        
-    def forward(self,
-                input_patches,      # [batch_size, seq_length, hidden_size]
-                input_masks,        # [batch_size, seq_length]
-                selected_indices,   # [batch_size, seq_length]
-                target_patches):    # [batch_size, seq_length, hidden_size]
-        input_patches = input_patches.reshape(len(input_patches), -1, PATCH_SIZE).to(self.device)
+
+    def forward(
+        self,
+        input_patches,  # [batch_size, seq_length, hidden_size]
+        input_masks,  # [batch_size, seq_length]
+        selected_indices,  # [batch_size, seq_length]
+        target_patches,
+    ):  # [batch_size, seq_length, hidden_size]
+        input_patches = input_patches.reshape(len(input_patches), -1, PATCH_SIZE).to(
+            self.device
+        )
         input_masks = input_masks.to(self.device)
         selected_indices = selected_indices.to(self.device)
-        target_patches = target_patches.reshape(len(target_patches), -1, PATCH_SIZE).to(self.device)
+        target_patches = target_patches.reshape(len(target_patches), -1, PATCH_SIZE).to(
+            self.device
+        )
 
         # Pass the input_patches and input_masks through the encoder
         outputs = self.encoder(input_patches, input_masks)["last_hidden_state"]
-        
+
         # Use selected_indices to form target_patches
         target_patches = target_patches[selected_indices.bool()]
         patch_features = outputs[selected_indices.bool()]
-        
+
         # Pass patch_features and target_patches through the decoder
         return self.decoder(patch_features, target_patches)
 
+
 class CLaMP3Model(PreTrainedModel):
-    def __init__(self,
-                 audio_config,
-                 symbolic_config,
-                 global_rank=None,
-                 world_size=None,
-                 text_model_name=TEXT_MODEL_NAME,
-                 hidden_size=CLAMP3_HIDDEN_SIZE,
-                 load_m3=CLAMP3_LOAD_M3):
+    def __init__(
+        self,
+        audio_config,
+        symbolic_config,
+        global_rank=None,
+        world_size=None,
+        text_model_name=TEXT_MODEL_NAME,
+        hidden_size=CLAMP3_HIDDEN_SIZE,
+        load_m3=CLAMP3_LOAD_M3,
+    ):
         super(CLaMP3Model, self).__init__(symbolic_config)
 
-        self.text_model = AutoModel.from_pretrained(text_model_name, torch_dtype=torch.float16,
-    low_cpu_mem_usage=True) # Load the text model
-        self.text_proj = torch.nn.Linear(self.text_model.config.hidden_size, hidden_size) # Linear layer for text projections
-        torch.nn.init.normal_(self.text_proj.weight, std=0.02) # Initialize weights with normal distribution
+        self.text_model = AutoModel.from_pretrained(
+            text_model_name, torch_dtype=torch.float16, low_cpu_mem_usage=True
+        )  # Load the text model
+        self.text_proj = torch.nn.Linear(
+            self.text_model.config.hidden_size, hidden_size
+        )  # Linear layer for text projections
+        torch.nn.init.normal_(
+            self.text_proj.weight, std=0.02
+        )  # Initialize weights with normal distribution
 
-        self.symbolic_model = M3PatchEncoder(symbolic_config) # Initialize the symbolic model
-        self.symbolic_proj = torch.nn.Linear(M3_HIDDEN_SIZE, hidden_size) # Linear layer for symbolic projections
-        torch.nn.init.normal_(self.symbolic_proj.weight, std=0.02) # Initialize weights with normal distribution
+        self.symbolic_model = M3PatchEncoder(
+            symbolic_config
+        )  # Initialize the symbolic model
+        self.symbolic_proj = torch.nn.Linear(
+            M3_HIDDEN_SIZE, hidden_size
+        )  # Linear layer for symbolic projections
+        torch.nn.init.normal_(
+            self.symbolic_proj.weight, std=0.02
+        )  # Initialize weights with normal distribution
 
-        self.audio_model = BertModel(audio_config) # Initialize the audio model
-        self.audio_proj = torch.nn.Linear(audio_config.hidden_size, hidden_size) # Linear layer for audio projections
-        torch.nn.init.normal_(self.audio_proj.weight, std=0.02) # Initialize weights with normal distribution
+        self.audio_model = BertModel(audio_config)  # Initialize the audio model
+        self.audio_proj = torch.nn.Linear(
+            audio_config.hidden_size, hidden_size
+        )  # Linear layer for audio projections
+        torch.nn.init.normal_(
+            self.audio_proj.weight, std=0.02
+        )  # Initialize weights with normal distribution
 
-        if global_rank==None or world_size==None:
+        if global_rank == None or world_size == None:
             global_rank = 0
             world_size = 1
 
-        self.loss_fn = ClipLoss(local_loss=False,
-                                gather_with_grad=True,
-                                cache_labels=False,
-                                rank=global_rank,
-                                world_size=world_size)
+        self.loss_fn = ClipLoss(
+            local_loss=False,
+            gather_with_grad=True,
+            cache_labels=False,
+            rank=global_rank,
+            world_size=world_size,
+        )
 
         if load_m3 and os.path.exists(M3_WEIGHTS_PATH):
-            checkpoint = torch.load(M3_WEIGHTS_PATH, map_location='cpu', weights_only=True)
-            decoder_config = GPT2Config(vocab_size=128,
-                            n_positions=PATCH_SIZE,
-                            n_embd=M3_HIDDEN_SIZE,
-                            n_layer=TOKEN_NUM_LAYERS,
-                            n_head=M3_HIDDEN_SIZE//64,
-                            n_inner=M3_HIDDEN_SIZE*4)
+            checkpoint = torch.load(
+                M3_WEIGHTS_PATH, map_location="cpu", weights_only=True
+            )
+            decoder_config = GPT2Config(
+                vocab_size=128,
+                n_positions=PATCH_SIZE,
+                n_embd=M3_HIDDEN_SIZE,
+                n_layer=TOKEN_NUM_LAYERS,
+                n_head=M3_HIDDEN_SIZE // 64,
+                n_inner=M3_HIDDEN_SIZE * 4,
+            )
             model = M3Model(symbolic_config, decoder_config)
-            model.load_state_dict(checkpoint['model'])
+            model.load_state_dict(checkpoint["model"])
             self.symbolic_model = model.encoder
             model = None
-            print(f"Successfully Loaded M3 Checkpoint from Epoch {checkpoint['epoch']} with loss {checkpoint['min_eval_loss']}")
+            logger.info(
+                f"Successfully Loaded M3 Checkpoint from Epoch {checkpoint['epoch']} with loss {checkpoint['min_eval_loss']}"
+            )
 
     def avg_pooling(self, input_features, input_masks):
-        input_masks = input_masks.unsqueeze(-1).to(self.device) # add a dimension to match the feature dimension
-        input_features = input_features * input_masks # apply mask to input_features
-        avg_pool = input_features.sum(dim=1) / input_masks.sum(dim=1) # calculate average pooling
-        
+        input_masks = input_masks.unsqueeze(-1).to(
+            self.device
+        )  # add a dimension to match the feature dimension
+        input_features = input_features * input_masks  # apply mask to input_features
+        avg_pool = input_features.sum(dim=1) / input_masks.sum(
+            dim=1
+        )  # calculate average pooling
+
         return avg_pool
-    
-    def get_text_features(self,
-                          text_inputs,
-                          text_masks,
-                          get_global=False):
-        text_features = self.text_model(text_inputs.to(self.device),
-                                        attention_mask=text_masks.to(self.device))['last_hidden_state']
+
+    def get_text_features(self, text_inputs, text_masks, get_global=False):
+        text_features = self.text_model(
+            text_inputs.to(self.device), attention_mask=text_masks.to(self.device)
+        )["last_hidden_state"]
 
         if get_global:
             text_features = self.avg_pooling(text_features, text_masks)
             text_features = self.text_proj(text_features)
-        
+
         return text_features
-    
-    def get_symbolic_features(self,
-                              symbolic_inputs,
-                              symbolic_masks,
-                              get_global=False):
-        symbolic_features = self.symbolic_model(symbolic_inputs.to(self.device),
-                                                symbolic_masks.to(self.device))['last_hidden_state']
+
+    def get_symbolic_features(self, symbolic_inputs, symbolic_masks, get_global=False):
+        symbolic_features = self.symbolic_model(
+            symbolic_inputs.to(self.device), symbolic_masks.to(self.device)
+        )["last_hidden_state"]
 
         if get_global:
             symbolic_features = self.avg_pooling(symbolic_features, symbolic_masks)
             symbolic_features = self.symbolic_proj(symbolic_features)
-        
+
         return symbolic_features
-    
-    def get_audio_features(self,
-                           audio_inputs,
-                           audio_masks,
-                           get_global=False):
-        audio_features = self.audio_model(inputs_embeds=audio_inputs.to(self.device),
-                                          attention_mask=audio_masks.to(self.device))['last_hidden_state']
+
+    def get_audio_features(self, audio_inputs, audio_masks, get_global=False):
+        audio_features = self.audio_model(
+            inputs_embeds=audio_inputs.to(self.device),
+            attention_mask=audio_masks.to(self.device),
+        )["last_hidden_state"]
 
         if get_global:
             audio_features = self.avg_pooling(audio_features, audio_masks)
             audio_features = self.audio_proj(audio_features)
-        
+
         return audio_features
 
-    def forward(self,
-                text_inputs,     # [batch_size, seq_length]
-                text_masks,      # [batch_size, seq_length]
-                music_inputs,    # [batch_size, seq_length, hidden_size]
-                music_masks,     # [batch_size, seq_length]
-                music_modality): # "symbolic" or "audio"
+    def forward(
+        self,
+        text_inputs,  # [batch_size, seq_length]
+        text_masks,  # [batch_size, seq_length]
+        music_inputs,  # [batch_size, seq_length, hidden_size]
+        music_masks,  # [batch_size, seq_length]
+        music_modality,
+    ):  # "symbolic" or "audio"
         # Compute the text features
         text_features = self.get_text_features(text_inputs, text_masks, get_global=True)
 
         # Compute the music features
-        if music_modality=="symbolic":
-            music_features = self.get_symbolic_features(music_inputs, music_masks, get_global=True)
-        elif music_modality=="audio":
-            music_features = self.get_audio_features(music_inputs, music_masks, get_global=True)
+        if music_modality == "symbolic":
+            music_features = self.get_symbolic_features(
+                music_inputs, music_masks, get_global=True
+            )
+        elif music_modality == "audio":
+            music_features = self.get_audio_features(
+                music_inputs, music_masks, get_global=True
+            )
         else:
             raise ValueError("music_modality must be either 'symbolic' or 'audio'")
 
-        return self.loss_fn(text_features,
-                            music_features,
-                            LOGIT_SCALE,
-                            output_dict=False)
+        return self.loss_fn(
+            text_features, music_features, LOGIT_SCALE, output_dict=False
+        )

@@ -1,20 +1,22 @@
-import logging
 from pathlib import Path
 from typing import Dict, Tuple
 
 import numpy as np
 import openl3
 import soundfile as sf
-from config import * 
+from tqdm import tqdm
 
-logger = logging.getLogger(__name__)
+from config import *
+from utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class AudioProcessor:
     def __init__(self, output_dir: Path):
         """
         Initialize the audio processor.
-        
+
         Args:
             output_dir: Directory to save processed audio features
         """
@@ -25,16 +27,16 @@ class AudioProcessor:
         self.model = openl3.models.load_audio_embedding_model(
             input_repr=INPUT_REPR,
             content_type=CONTENT_TYPE,
-            embedding_size=EMBEDDING_SIZE
+            embedding_size=EMBEDDING_SIZE,
         )
 
     def load_audio(self, file_path: Path) -> Tuple[np.ndarray, int]:
         """
         Load audio file.
-        
+
         Args:
             file_path: Path to audio file
-            
+
         Returns:
             Tuple of (audio data, sample rate)
         """
@@ -50,11 +52,11 @@ class AudioProcessor:
     def extract_features(self, audio: np.ndarray, sr: int) -> Dict[str, np.ndarray]:
         """
         Extract audio features using OpenL3.
-        
+
         Args:
             audio: Audio data
             sr: Sample rate
-            
+
         Returns:
             Dictionary of audio features containing time-series embeddings
         """
@@ -66,13 +68,10 @@ class AudioProcessor:
                 model=self.model,
                 center=True,
                 hop_size=HOP_SIZE,
-                batch_size=32
+                batch_size=32,
             )
 
-            return {
-                'embeddings': emb,  # Time-series embeddings
-                'timestamps': ts
-            }
+            return {"embeddings": emb, "timestamps": ts}  # Time-series embeddings
 
         except Exception as e:
             logger.error(f"Error extracting features: {str(e)}")
@@ -81,10 +80,10 @@ class AudioProcessor:
     def process_file(self, file_path: Path) -> Dict[str, np.ndarray]:
         """
         Process a single audio file.
-        
+
         Args:
             file_path: Path to audio file
-            
+
         Returns:
             Dictionary of processed features
         """
@@ -108,18 +107,18 @@ class AudioProcessor:
     def process_directory(self, input_dir: Path) -> Dict[str, Dict[str, np.ndarray]]:
         """
         Process all audio files in a directory.
-        
+
         Args:
             input_dir: Directory containing audio files
-            
+
         Returns:
             Dictionary mapping filenames to their features
         """
         results = {}
         # Get all audio files
-        audio_files = list(input_dir.glob('*.wav')) + list(input_dir.glob('*.mp3'))
+        audio_files = list(input_dir.glob("*.wav")) + list(input_dir.glob("*.mp3"))
 
-        for file_path in audio_files:
+        for file_path in tqdm(audio_files):
             try:
                 features = self.process_file(file_path)
                 results[file_path.stem] = features

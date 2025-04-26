@@ -1,17 +1,23 @@
-import os
 import math
-import mido
+import os
 import random
-from tqdm import tqdm
 from multiprocessing import Pool
 
-def msg_to_str(msg):
+import mido
+from tqdm import tqdm
+
+
+def msg_to_str(msg) -> str:
+    """
+    Decode message to string
+    """
     str_msg = ""
     for key, value in msg.dict().items():
         str_msg += " " + str(value)
-    return str_msg.strip().encode('unicode_escape').decode('utf-8')
+    return str_msg.strip().encode("unicode_escape").decode("utf-8")
 
-def load_midi(filename, m3_compatible):
+
+def load_midi(filename, m3_compatible) -> str:
     """
     Load a MIDI file and convert it to MTF format.
     """
@@ -22,13 +28,22 @@ def load_midi(filename, m3_compatible):
     for msg in mid.merged_track:
         if m3_compatible:
             if msg.is_meta:
-                if msg.type in ["text", "copyright", "track_name", "instrument_name", 
-                                "lyrics", "marker", "cue_marker", "device_name"]:
+                if msg.type in [
+                    "text",
+                    "copyright",
+                    "track_name",
+                    "instrument_name",
+                    "lyrics",
+                    "marker",
+                    "cue_marker",
+                    "device_name",
+                ]:
                     continue
         str_msg = msg_to_str(msg)
         msg_list.append(str_msg)
-    
+
     return "\n".join(msg_list)
+
 
 def convert_midi2mtf(file_list, input_dir, output_dir, m3_compatible):
     """
@@ -44,27 +59,31 @@ def convert_midi2mtf(file_list, input_dir, output_dir, m3_compatible):
             output = load_midi(file, m3_compatible)
 
             if not output:
-                with open('logs/midi2mtf_error_log.txt', 'a', encoding='utf-8') as f:
-                    f.write(file + '\n')
+                with open("logs/midi2mtf_error_log.txt", "a", encoding="utf-8") as f:
+                    f.write(file + "\n")
                 continue
             else:
-                output_file_path = os.path.join(output_folder, os.path.splitext(os.path.basename(file))[0] + '.mtf')
-                with open(output_file_path, 'w', encoding='utf-8') as f:
+                output_file_path = os.path.join(
+                    output_folder, os.path.splitext(os.path.basename(file))[0] + ".mtf"
+                )
+                with open(output_file_path, "w", encoding="utf-8") as f:
                     f.write(output)
         except Exception as e:
-            with open('logs/midi2mtf_error_log.txt', 'a', encoding='utf-8') as f:
-                f.write(file + " " + str(e) + '\n')
+            with open("logs/midi2mtf_error_log.txt", "a", encoding="utf-8") as f:
+                f.write(file + " " + str(e) + "\n")
             pass
 
-def midi_2_mtf(input_dir, output_dir):
 
+def midi_2_mtf(input_dir, output_dir) -> None:
+    """
+    Transform midi to mtf extension
+    """
     file_list = []
     os.makedirs("logs", exist_ok=True)
     # Traverse the specified input folder for MIDI files
     input_dir = os.path.abspath(input_dir)
 
-    
-    for root, dirs, files in os.walk(input_dir):
+    for root, _, files in os.walk(input_dir):
         for file in files:
             if not file.endswith((".mid", ".midi")):
                 continue
@@ -81,6 +100,9 @@ def midi_2_mtf(input_dir, output_dir):
     # Use multiprocessing to speed up conversion
     pool = Pool(processes=os.cpu_count())
     pool.starmap(
-        convert_midi2mtf, 
-        [(file_list_chunk, input_dir, output_dir, True) for file_list_chunk in file_lists]
+        convert_midi2mtf,
+        [
+            (file_list_chunk, input_dir, output_dir, True)
+            for file_list_chunk in file_lists
+        ],
     )

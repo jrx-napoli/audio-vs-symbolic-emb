@@ -1,7 +1,8 @@
-INPUT_REPR = "mel256" # mel256, mel128 or linear
-CONTENT_TYPE = "music" # music or env
-EMBEDDING_SIZE = 512; #512 or 8192 
-HOP_SIZE = 0.1 # From 0.1 to 0.5
+INPUT_REPR = "mel256"  # mel256, mel128 or linear
+CONTENT_TYPE = "music"  # music or env
+EMBEDDING_SIZE = 512
+# 512 or 8192
+HOP_SIZE = 0.1  # From 0.1 to 0.5
 
 # -------------------- Configuration for M3 Training --------------------
 
@@ -20,17 +21,28 @@ M3_WANDB_LOG = True  # Enable logging to Weights and Biases
 M3_LOAD_CKPT = True  # Load model weights from a checkpoint if available
 
 M3_WEIGHTS_PATH = (
-    "weights_m3"+
-    "_h_size_" + str(M3_HIDDEN_SIZE) +
-    "_t_layers_" + str(TOKEN_NUM_LAYERS) +
-    "_p_layers_" + str(PATCH_NUM_LAYERS) +
-    "_p_size_" + str(PATCH_SIZE) +
-    "_p_length_" + str(PATCH_LENGTH) +
-    "_lr_" + str(M3_LEARNING_RATE) +
-    "_batch_" + str(M3_BATCH_SIZE) +
-    "_mask_" + str(M3_MASK_RATIO) + ".pth"
+    "weights_m3"
+    + "_h_size_"
+    + str(M3_HIDDEN_SIZE)
+    + "_t_layers_"
+    + str(TOKEN_NUM_LAYERS)
+    + "_p_layers_"
+    + str(PATCH_NUM_LAYERS)
+    + "_p_size_"
+    + str(PATCH_SIZE)
+    + "_p_length_"
+    + str(PATCH_LENGTH)
+    + "_lr_"
+    + str(M3_LEARNING_RATE)
+    + "_batch_"
+    + str(M3_BATCH_SIZE)
+    + "_mask_"
+    + str(M3_MASK_RATIO)
+    + ".pth"
 )  # Path to store the model weights
-M3_LOGS_PATH = M3_WEIGHTS_PATH.replace("weights", "logs").replace("pth", "txt")  # Path to save training logs
+M3_LOGS_PATH = M3_WEIGHTS_PATH.replace("weights", "logs").replace(
+    "pth", "txt"
+)  # Path to save training logs
 
 # -------------------- Configuration for CLaMP3 Training ----------------
 
@@ -56,16 +68,26 @@ CLAMP3_LOAD_CKPT = True  # Load weights from a checkpoint if available
 SAVE_EVERY = 5  # Save model weights every SAVE_EVERY epochs
 
 CLAMP3_WEIGHTS_PATH = (
-    "weights_clamp3_saas" +
-    "_h_size_" + str(CLAMP3_HIDDEN_SIZE) +
-    "_t_model_" + TEXT_MODEL_NAME.replace("/", "_") +
-    "_t_length_" + str(MAX_TEXT_LENGTH) +
-    "_a_size_" + str(AUDIO_HIDDEN_SIZE) +
-    "_a_layers_" + str(AUDIO_NUM_LAYERS) +
-    "_a_length_" + str(MAX_AUDIO_LENGTH) +
-    "_s_size_" + str(M3_HIDDEN_SIZE) +
-    "_s_layers_" + str(PATCH_NUM_LAYERS) +
-    "_p_size_" + str(PATCH_SIZE) +
-    "_p_length_" + str(PATCH_LENGTH) + ".pth"
-
+    "weights_clamp3_saas"
+    + "_h_size_"
+    + str(CLAMP3_HIDDEN_SIZE)
+    + "_t_model_"
+    + TEXT_MODEL_NAME.replace("/", "_")
+    + "_t_length_"
+    + str(MAX_TEXT_LENGTH)
+    + "_a_size_"
+    + str(AUDIO_HIDDEN_SIZE)
+    + "_a_layers_"
+    + str(AUDIO_NUM_LAYERS)
+    + "_a_length_"
+    + str(MAX_AUDIO_LENGTH)
+    + "_s_size_"
+    + str(M3_HIDDEN_SIZE)
+    + "_s_layers_"
+    + str(PATCH_NUM_LAYERS)
+    + "_p_size_"
+    + str(PATCH_SIZE)
+    + "_p_length_"
+    + str(PATCH_LENGTH)
+    + ".pth"
 )  # Path to store CLaMP3 model weights
