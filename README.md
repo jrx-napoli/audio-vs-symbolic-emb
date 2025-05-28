@@ -33,11 +33,17 @@ Run the following command from the project root:
 ```bash
 docker compose build
 ```
-### Run the Docker
+### Up the Docker
 
 ```bash
-docker compose run
+docker compose up
 ```
+
+### Get inside cointainer
+```bash
+docker compose run --rm --entrypoint bash embedding-analysis
+```
+Inside the container you can run python scripts which are described below
 
 ## Setup (manual)
 

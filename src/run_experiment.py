@@ -70,16 +70,35 @@ class ExperimentRunner:
         """Analyze and visualize the results."""
         logger.info("Analyzing results...")
 
-        # Visualize embeddings
+        # Visualize embeddings (PCA / t-SNE)
         self.comparator.visualize_embeddings(
             self.results["audio_embeddings"], self.results["symbolic_embeddings"]
         )
 
-        # Analyze correlations
+        # Analyze cosine similarity distribution
         stats = self.comparator.analyze_correlations(self.results["similarities"])
 
-        # Save analysis
+        # Save distribution + stats
         self.comparator.save_analysis(self.results["similarities"], stats)
+
+        # Store embeddings in comparator instance for internal use
+        self.comparator.audio_embeddings = self.results["audio_embeddings"]
+        self.comparator.symbolic_embeddings = self.results["symbolic_embeddings"]
+
+        # Run centroid analysis
+        self.comparator.analyze_centroids()
+
+        # K-means clustering + silhouette
+        self.comparator.cluster_kmeans()
+
+        # Cosine similarity heatmaps
+        self.comparator.heatmap_similarity()
+
+        # Kolmogorov–Smirnov test
+        self.comparator.kolmogorov_smirnov_test()
+
+        # MANOVA
+        self.comparator.manova_test()
 
     def save_results(self) -> None:
         """Save all experiment results."""
