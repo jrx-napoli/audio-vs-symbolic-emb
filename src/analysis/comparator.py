@@ -240,47 +240,52 @@ class EmbeddingComparator:
 
     def analyze_centroids(self):
         '''
-        Analiza centroidów: oblicza średnie wektory (centroidy) dla audio i symbolic,
-        następnie wyznacza ich odległość euklidesową oraz podobieństwo cosinusowe.
+        Centroid analysis: computes average vectors (centroids) for audio and symbolic embeddings,
+        then calculates their Euclidean distance and cosine similarity.
         '''
-        # Wyznaczenie wspólnych plików/kluczy
+        # Identify common keys/files
         keys = set(self.audio_embeddings.keys()) & set(self.symbolic_embeddings.keys())
         if not keys:
-            logger.info("Brak wspólnych plików pomiędzy audio i symbolic embeddings.")
+            logger.info("No common files between audio and symbolic embeddings.")
             return
         keys = sorted(keys)
-        # Budowa macierzy embeddingów (tylko dla wspólnych plików)
+        # Build embedding matrices (only for common files)
         audio_matrix = np.vstack([self.audio_embeddings[k] for k in keys])
         symbolic_matrix = np.vstack([self.symbolic_embeddings[k] for k in keys])
-        # Obliczenie centroidów (średnich wektorów)
+
+        # Compute centroids
         centroid_audio = np.mean(audio_matrix, axis=0)
         centroid_symbolic = np.mean(symbolic_matrix, axis=0)
-        # Odległość euklidesowa między centroidami
+
+        # Euclidean distance between centroids
         euclid_dist = np.linalg.norm(centroid_audio - centroid_symbolic)
-        # Podobieństwo cosinusowe między centroidami
+
+        # Cosine similarity between centroids
         cos_sim = cosine_similarity(centroid_audio.reshape(1, -1),
                                     centroid_symbolic.reshape(1, -1))[0, 0]
-        # Logowanie wyników
-        logger.info(f"Odległość euklidesowa między centroidami: {euclid_dist:.4f}")
-        logger.info(f"Podobieństwo cosinusowe między centroidami: {cos_sim:.4f}")
+
+        # Save results to file
+        logger.info(f"Euclidean distance between centroids: {euclid_dist:.4f}")
+        logger.info(f"Cosine similarity between centroids: {cos_sim:.4f}")
+
         # Zapis wyników do pliku
         os.makedirs(self.output_dir, exist_ok=True)
         outfile = os.path.join(self.output_dir, "centroid_analysis.txt")
         with open(outfile, 'w') as f:
             f.write(f"Euclidean distance between centroids: {euclid_dist:.6f}\n")
             f.write(f"Cosine similarity between centroids: {cos_sim:.6f}\n")
-        logger.info(f"Wyniki analizy centroidów zapisano w {outfile}")
+        logger.info(f"Centroid analysis results saved to {outfile}")
 
     def cluster_kmeans(self, max_clusters=10):
         '''
-        Klasteryzacja KMeans dla audio i symbolic embeddingów.
-        Dla każdego z zestawów obliczany jest wskaźnik silhouette dla różnych K,
-        wybierany najlepszy model oraz tworzona wizualizacja zależności silhouette od liczby klastrów.
+        Applies KMeans clustering for audio and symbolic embeddings.
+        Calculates silhouette score for a range of K values and selects the best model.
+        Also plots silhouette score vs number of clusters.
         '''
-        # Wspólne pliki/klucze
+
         keys = set(self.audio_embeddings.keys()) & set(self.symbolic_embeddings.keys())
         if not keys:
-            logger.info("Brak wspólnych plików do klasteryzacji KMeans.")
+            logger.info("No common files available for KMeans clustering.")
             return
         keys = sorted(keys)
         audio_matrix = np.vstack([self.audio_embeddings[k] for k in keys])
@@ -288,42 +293,46 @@ class EmbeddingComparator:
         for modality, data_matrix in [("audio", audio_matrix), ("symbolic", symbolic_matrix)]:
             n_samples = data_matrix.shape[0]
             if n_samples < 2:
-                logger.info(f"Niewystarczająca liczba próbek w {modality} do klasteryzacji.")
+                logger.info(f"Not enough samples in {modality} to perform clustering.")
                 continue
+
             max_k = min(max_clusters, n_samples - 1)
             silhouette_vals = []
             k_range = range(2, max_k + 1)
+
             for k in k_range:
                 kmeans = KMeans(n_clusters=k, random_state=0)
                 labels = kmeans.fit_predict(data_matrix)
-                # Obliczanie silhouette score
+
+                # silhouette score
                 score = silhouette_score(data_matrix, labels)
                 silhouette_vals.append(score)
-            # Wybór najlepszego K
+
             best_k = k_range[int(np.argmax(silhouette_vals))]
             best_score = max(silhouette_vals)
-            logger.info(f"Najlepsza liczba klastrów dla {modality}: {best_k} z silhouette {best_score:.4f}")
-            # Wizualizacja silhouette vs liczba klastrów
+            logger.info(f"Best number of clusters for {modality}: {best_k} with silhouette {best_score:.4f}")
+
+            # Plot silhouette vs number of clusters
             plt.figure()
             plt.plot(list(k_range), silhouette_vals, marker='o')
-            plt.title(f"Silhouette score dla klasteryzacji KMeans ({modality})")
-            plt.xlabel("Liczba klastrów (K)")
-            plt.ylabel("Średni wskaźnik Silhouette")
+            plt.title(f"Silhouette score for KMeans clustering ({modality})")
+            plt.xlabel("Number of clusters (K)")
+            plt.ylabel("Average Silhouette Score")
             plt.xticks(list(k_range))
             plt.grid(True)
             os.makedirs(self.output_dir, exist_ok=True)
             plot_file = os.path.join(self.output_dir, f"silhouette_{modality}.png")
             plt.savefig(plot_file)
             plt.close()
-            logger.info(f"Wykres silhouette dla {modality} zapisano w {plot_file}")
+            logger.info(f"Silhouette plot for {modality} saved to {plot_file}")
 
     def heatmap_similarity(self):
         '''
-        Tworzy mapy cieplne (heatmapy) podobieństw cosinusowych wewnątrz zbioru audio i symbolic.
+        Generates cosine similarity heatmaps for audio and symbolic embeddings.
         '''
         keys = set(self.audio_embeddings.keys()) & set(self.symbolic_embeddings.keys())
         if not keys:
-            logger.info("Brak wspólnych plików do analizy heatmap.")
+            logger.info("No common files to generate similarity heatmaps.")
             return
         keys = sorted(keys)
         audio_matrix = np.vstack([self.audio_embeddings[k] for k in keys])
@@ -331,35 +340,36 @@ class EmbeddingComparator:
         for modality, data_matrix in [("audio", audio_matrix), ("symbolic", symbolic_matrix)]:
             if data_matrix.shape[0] == 0:
                 continue
-            # Macierz podobieństw cosinusowych
+
             sim_matrix = cosine_similarity(data_matrix)
             plt.figure(figsize=(6, 5))
             plt.imshow(sim_matrix, aspect='auto', origin='lower', cmap='viridis')
-            plt.title(f"Heatmapa podobieństw ({modality})")
-            plt.colorbar(label="Podobieństwo cosinusowe")
-            plt.xlabel("Wpisy")
-            plt.ylabel("Wpisy")
+            plt.title(f"Cosine Similarity Heatmap ({modality})")
+            plt.colorbar(label="Cosine Similarity")
+            plt.xlabel("Entries")
+            plt.ylabel("Entries")
             os.makedirs(self.output_dir, exist_ok=True)
             heatmap_file = os.path.join(self.output_dir, f"heatmap_{modality}.png")
             plt.savefig(heatmap_file)
             plt.close()
-            logger.info(f"Heatmapa podobieństw dla {modality} zapisana w {heatmap_file}")
+            logger.info(f"Similarity heatmap for {modality} saved to {heatmap_file}")
 
     def kolmogorov_smirnov_test(self):
         '''
-        Przeprowadza dwuprobną analizę Kolmogorova-Smirnova dla rozkładów podobieństw cosinusowych w audio vs symbolic.
+        Performs a two-sample Kolmogorov–Smirnov test to compare cosine similarity distributions
+        between audio and symbolic embeddings.
         '''
         keys = set(self.audio_embeddings.keys()) & set(self.symbolic_embeddings.keys())
         if not keys:
-            logger.info("Brak wspólnych plików do testu Kolmogorov-Smirnova.")
+            logger.info("No common files for Kolmogorov–Smirnov test")
             return
         keys = sorted(keys)
         audio_matrix = np.vstack([self.audio_embeddings[k] for k in keys])
         symbolic_matrix = np.vstack([self.symbolic_embeddings[k] for k in keys])
-        # Rozkłady podobieństw (spłaszczenie macierzy podobieństw)
+
         audio_sims = cosine_similarity(audio_matrix).flatten()
         symbolic_sims = cosine_similarity(symbolic_matrix).flatten()
-        # Test dwuproba Kolmogorova-Smirnova
+
         stat, p_value = ks_2samp(audio_sims, symbolic_sims)
         logger.info(f"Kolmogorov-Smirnov D: {stat:.4f}, p-value: {p_value:.4f}")
         os.makedirs(self.output_dir, exist_ok=True)
@@ -367,28 +377,28 @@ class EmbeddingComparator:
         with open(ks_file, 'w') as f:
             f.write(f"D-statistic: {stat:.6f}\n")
             f.write(f"p-value: {p_value:.6f}\n")
-        logger.info(f"Wyniki testu Kolmogorova-Smirnova zapisano w {ks_file}")
+        logger.info(f"Kolmogorov–Smirnov test results saved to {ks_file}")
 
     def manova_test(self):
         '''
-        Przeprowadza MANOVA (wielowymiarową analizę wariancji) porównującą wektory embeddingów audio i symbolic.
+        Performs MANOVA (Multivariate Analysis of Variance) to compare audio vs symbolic embedding vectors.
         '''
         keys = set(self.audio_embeddings.keys()) & set(self.symbolic_embeddings.keys())
         if not keys:
-            logger.info("Brak wspólnych plików do testu MANOVA.")
+            logger.info("No common files for MANOVA test.")
             return
         keys = sorted(keys)
         audio_matrix = np.vstack([self.audio_embeddings[k] for k in keys])
         symbolic_matrix = np.vstack([self.symbolic_embeddings[k] for k in keys])
         n = audio_matrix.shape[0]
         dim = audio_matrix.shape[1]
-        # Przygotowanie DataFrame dla MANOVA
+
         df = pd.DataFrame(
             np.vstack([audio_matrix, symbolic_matrix]),
             columns=[f"X{i}" for i in range(dim)]
         )
         df["group"] = ["audio"] * n + ["symbolic"] * n
-        # Formuła MANOVA: wszystkie wymiary vs grupa
+
         dep_vars = "+".join([f"X{i}" for i in range(dim)])
         formula = dep_vars + " ~ group"
         maov = MANOVA.from_formula(formula, data=df)
@@ -397,4 +407,4 @@ class EmbeddingComparator:
         manova_file = os.path.join(self.output_dir, "manova_results.txt")
         with open(manova_file, 'w') as f:
             f.write(str(result))
-        logger.info(f"Wyniki testu MANOVA zapisano w {manova_file}")
+        logger.info(f"MANOVA test results saved to {manova_file}")

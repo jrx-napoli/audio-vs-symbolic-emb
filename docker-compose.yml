@@ -1,0 +1,13 @@
+version: "3.9"
+
+services:
+  embedding-analysis:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ./src:/app/src
+      - ./data:/app/data
+      - ./results:/app/results
+      - ./logs:/app/logs
+    working_dir: /app

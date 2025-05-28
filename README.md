@@ -15,11 +15,31 @@ This project analyzes the similarities between embeddings of symbolic music (e.g
 │   ├── symbolic/          # Symbolic music processing and embedding extraction
 │   ├── analysis/          # Analysis tools and similarity metrics
 │   └── utils/             # Utility functions
-├── requirements.txt        # Python dependencies
-└── README.md              # This file
+├── requirements.txt
+├── docker-compose.yml
+├── Dockerfile
+└── README.md            # This file
+```
+## Setup (with Docker Compose)
+### Prerequisites
+
+- [Docker Desktop](https://www.docker.com/products/docker-desktop) (Docker Engine + CLI)
+- Docker Compose (version 2+ recommended; use `docker compose`, not `docker-compose`)
+- Cloned or downloaded project files with the correct directory structure
+---
+### Build the Docker Image
+Run the following command from the project root:
+
+```bash
+docker compose build
+```
+### Run the Docker
+
+```bash
+docker compose run
 ```
 
-## Setup
+## Setup (manual)
 
 1. Create a virtual environment:
 ```bash
