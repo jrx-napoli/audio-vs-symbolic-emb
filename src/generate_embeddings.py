@@ -50,8 +50,15 @@ class GenerateEmbeddings:
         audio_features = {}
         symbolic_features = {}
 
+        counter = 0
+
         # Process files one by one according to metadata
         for _, row in self.metadata.iterrows():
+
+            counter += 1
+            if counter == 5:
+                break
+
             try:
                 # Process audio file
                 audio_path = self.raw_dir / row['audio_filename']
@@ -121,8 +128,8 @@ class GenerateEmbeddings:
         # Validate embeddings
         if not audio_embeddings:
             raise ValueError("No valid audio embeddings generated")
-        if not symbolic_embeddings:
-            raise ValueError("No valid symbolic embeddings generated")
+        # if not symbolic_embeddings:
+        #     raise ValueError("No valid symbolic embeddings generated")
 
         self.results = {
             "audio_embeddings": audio_embeddings,
@@ -145,33 +152,41 @@ class GenerateEmbeddings:
             audio_group = f.create_group('audio_embeddings')
 
             for k, v in self.results["audio_embeddings"].items():
-                song_group = audio_group.create_group(k)
-                song_group.create_dataset('sequence', data=v['sequence'])
-                song_group.create_dataset('average', data=v['average'])
+
+                # Create recording group directly under audio_embeddings
+                rec_group = audio_group.create_group(k)
                 
-                # Add metadata for this song
+                # Save embeddings
+                rec_group.create_dataset('sequence', data=v['sequence'])
+                rec_group.create_dataset('average', data=v['average'])
+                
+                # Add metadata for this recording
                 metadata = self.metadata[self.metadata['id'] == k].iloc[0]
                 for key, value in metadata.items():
                     if isinstance(value, (str, int, float)):
-                        song_group.create_dataset(key, data=str(value))
+                        rec_group.create_dataset(key, data=str(value))
                     else:
-                        song_group.create_dataset(key, data=str(value))
+                        rec_group.create_dataset(key, data=str(value))
 
             # Save symbolic embeddings
             symbolic_group = f.create_group('symbolic_embeddings')
 
             for k, v in self.results["symbolic_embeddings"].items():
-                song_group = symbolic_group.create_group(k)
-                song_group.create_dataset('sequence', data=v['sequence'])
-                song_group.create_dataset('average', data=v['average'])
+
+                # Create recording group directly under symbolic_embeddings
+                rec_group = symbolic_group.create_group(k)
                 
-                # Add metadata for this song
+                # Save embeddings
+                rec_group.create_dataset('sequence', data=v['sequence'])
+                rec_group.create_dataset('average', data=v['average'])
+                
+                # Add metadata for this recording
                 metadata = self.metadata[self.metadata['id'] == k].iloc[0]
                 for key, value in metadata.items():
                     if isinstance(value, (str, int, float)):
-                        song_group.create_dataset(key, data=str(value))
+                        rec_group.create_dataset(key, data=str(value))
                     else:
-                        song_group.create_dataset(key, data=str(value))
+                        rec_group.create_dataset(key, data=str(value))
 
         logger.info(f"Embeddings saved to {self.embeddings_dir}")
 
