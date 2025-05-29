@@ -151,10 +151,15 @@ class GenerateEmbeddings:
             # Save audio embeddings
             audio_group = f.create_group('audio_embeddings')
 
+            id_seq = 0
+
             for k, v in self.results["audio_embeddings"].items():
 
+                current_id = f'rec_{id_seq}'
+                id_seq += 1
+
                 # Create recording group directly under audio_embeddings
-                rec_group = audio_group.create_group(k)
+                rec_group = audio_group.create_group(current_id)
                 
                 # Save embeddings
                 rec_group.create_dataset('sequence', data=v['sequence'])
@@ -171,10 +176,15 @@ class GenerateEmbeddings:
             # Save symbolic embeddings
             symbolic_group = f.create_group('symbolic_embeddings')
 
+            id_seq = 0
+
             for k, v in self.results["symbolic_embeddings"].items():
 
+                current_id = f'rec_{id_seq}'
+                id_seq += 1
+
                 # Create recording group directly under symbolic_embeddings
-                rec_group = symbolic_group.create_group(k)
+                rec_group = symbolic_group.create_group(current_id)
                 
                 # Save embeddings
                 rec_group.create_dataset('sequence', data=v['sequence'])
