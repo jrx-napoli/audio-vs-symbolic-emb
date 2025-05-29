@@ -34,7 +34,7 @@ def extract_features(input_dir, output_dir=None) -> Dict[str, Dict[str, np.ndarr
     # Initialize accelerator and device
     accelerator = Accelerator()
     device = accelerator.device
-    logger.info("Using device:", device)
+    logger.info(f"Using device: {device}")
 
     # Model and configuration setup
     audio_config = BertConfig(
@@ -67,7 +67,7 @@ def extract_features(input_dir, output_dir=None) -> Dict[str, Dict[str, np.ndarr
 
     # log parameter number
     logger.info(
-        "Total Parameter Number: " + str(sum(p.numel() for p in model.parameters()))
+        f"Total Parameter Number: {sum(p.numel() for p in model.parameters())}"
     )
 
     # Load model weights
@@ -104,81 +104,110 @@ def extract_features(input_dir, output_dir=None) -> Dict[str, Dict[str, np.ndarr
     model.load_state_dict(checkpoint["model"])
 
     # process the files
-    return process_directory(
+    results = process_directory(
         input_dir, output_dir, files, patchilizer, model, accelerator, device
     )
+    
+    if not results:
+        logger.error("No results returned from process_directory")
+    else:
+        logger.info(f"Successfully processed {len(results)} files")
+        for k, v in results.items():
+            logger.info(f"Generated embeddings for {k}: shape={v['embeddings'].shape if 'embeddings' in v else 'no embeddings'}")
+    
+    return results
 
 
 def extract_feature(filename, patchilizer, model, device):
-    if not filename.endswith(".npy"):
-        with open(filename, "r", encoding="utf-8") as f:
-            item = f.read()
-
-    if filename.endswith(".abc") or filename.endswith(".mtf"):
-        input_data = patchilizer.encode(item, add_special_patches=True)
-        input_data = torch.tensor(input_data)
-        max_input_length = PATCH_LENGTH
-    else:
-        raise ValueError(
-            f"Unsupported file type: {filename}, only support .txt, .abc, .mtf, .npy files"
-        )
-
-    segment_list = []
-    for i in range(0, len(input_data), max_input_length):
-        segment_list.append(input_data[i : i + max_input_length])
-    segment_list[-1] = input_data[-max_input_length:]
-
-    last_hidden_states_list = []
-
-    for input_segment in segment_list:
-        input_masks = torch.tensor([1] * input_segment.size(0))
-        if filename.endswith(".abc") or filename.endswith(".mtf"):
-            pad_indices = (
-                torch.ones((PATCH_LENGTH - input_segment.size(0), PATCH_SIZE)).long()
-                * patchilizer.pad_token_id
-            )
-        else:
-            pad_indices = (
-                torch.ones(
-                    (MAX_AUDIO_LENGTH - input_segment.size(0), AUDIO_HIDDEN_SIZE)
-                ).float()
-                * 0.0
-            )
-        input_masks = torch.cat(
-            (input_masks, torch.zeros(max_input_length - input_segment.size(0))), 0
-        )
-        input_segment = torch.cat((input_segment, pad_indices), 0)
+    try:
+        if not filename.endswith(".npy"):
+            with open(filename, "r", encoding="utf-8") as f:
+                item = f.read()
 
         if filename.endswith(".abc") or filename.endswith(".mtf"):
-            last_hidden_states = model.get_symbolic_features(
-                symbolic_inputs=input_segment.unsqueeze(0).to(device),
-                symbolic_masks=input_masks.unsqueeze(0).to(device),
-                get_global=True,
-            )
+            # Encode the input data
+            try:
+                input_data = patchilizer.encode(item, add_special_patches=True)
+                input_data = torch.tensor(input_data)
+                max_input_length = PATCH_LENGTH
+            except Exception as e:
+                logger.error(f"Failed to encode input data: {str(e)}")
+                return None
         else:
-            last_hidden_states = model.get_audio_features(
-                audio_inputs=input_segment.unsqueeze(0).to(device),
-                audio_masks=input_masks.unsqueeze(0).to(device),
-                get_global=True,
-            )
-        last_hidden_states_list.append(last_hidden_states)
+            logger.error(f"Unsupported file type: {filename}, only support .txt, .abc, .mtf, .npy files")
+            return None
 
-    full_chunk_cnt = len(input_data) // max_input_length
-    remain_chunk_len = len(input_data) % max_input_length
-    if remain_chunk_len == 0:
-        feature_weights = torch.tensor(
-            [max_input_length] * full_chunk_cnt, device=device
-        ).view(-1, 1)
-    else:
-        feature_weights = torch.tensor(
-            [max_input_length] * full_chunk_cnt + [remain_chunk_len], device=device
-        ).view(-1, 1)
+        # Create segments
+        segment_list = []
+        for i in range(0, len(input_data), max_input_length):
+            segment_list.append(input_data[i : i + max_input_length])
+        segment_list[-1] = input_data[-max_input_length:]
 
-    last_hidden_states_list = torch.concat(last_hidden_states_list, 0)
-    last_hidden_states_list = last_hidden_states_list * feature_weights
-    last_hidden_states_list = last_hidden_states_list.sum(dim=0) / feature_weights.sum()
+        last_hidden_states_list = []
 
-    return last_hidden_states_list
+        # Process each segment
+        for input_segment in segment_list:
+            try:
+                input_masks = torch.tensor([1] * input_segment.size(0))
+                if filename.endswith(".abc") or filename.endswith(".mtf"):
+                    pad_indices = (
+                        torch.ones((PATCH_LENGTH - input_segment.size(0), PATCH_SIZE)).long()
+                        * patchilizer.pad_token_id
+                    )
+                else:
+                    pad_indices = (
+                        torch.ones(
+                            (MAX_AUDIO_LENGTH - input_segment.size(0), AUDIO_HIDDEN_SIZE)
+                        ).float()
+                        * 0.0
+                    )
+                input_masks = torch.cat(
+                    (input_masks, torch.zeros(max_input_length - input_segment.size(0))), 0
+                )
+                input_segment = torch.cat((input_segment, pad_indices), 0)
+
+                if filename.endswith(".abc") or filename.endswith(".mtf"):
+                    last_hidden_states = model.get_symbolic_features(
+                        symbolic_inputs=input_segment.unsqueeze(0).to(device),
+                        symbolic_masks=input_masks.unsqueeze(0).to(device),
+                        get_global=True,
+                    )
+                else:
+                    last_hidden_states = model.get_audio_features(
+                        audio_inputs=input_segment.unsqueeze(0).to(device),
+                        audio_masks=input_masks.unsqueeze(0).to(device),
+                        get_global=True,
+                    )
+                last_hidden_states_list.append(last_hidden_states)
+            except Exception as e:
+                logger.error(f"Failed to process segment: {str(e)}")
+                return None
+
+        # Calculate weights and combine results
+        try:
+            full_chunk_cnt = len(input_data) // max_input_length
+            remain_chunk_len = len(input_data) % max_input_length
+            if remain_chunk_len == 0:
+                feature_weights = torch.tensor(
+                    [max_input_length] * full_chunk_cnt, device=device
+                ).view(-1, 1)
+            else:
+                feature_weights = torch.tensor(
+                    [max_input_length] * full_chunk_cnt + [remain_chunk_len], device=device
+                ).view(-1, 1)
+
+            last_hidden_states_list = torch.concat(last_hidden_states_list, 0)
+            last_hidden_states_list = last_hidden_states_list * feature_weights
+            last_hidden_states_list = last_hidden_states_list.sum(dim=0) / feature_weights.sum()
+
+            return last_hidden_states_list
+        except Exception as e:
+            logger.error(f"Failed to combine feature segments: {str(e)}")
+            return None
+
+    except Exception as e:
+        logger.error(f"Unexpected error in feature extraction: {str(e)}")
+        return None
 
 
 def process_directory(
@@ -198,32 +227,48 @@ def process_directory(
 
     # process the files
     for file in tqdm(files_to_process):
-        file_name = os.path.splitext(os.path.basename(file))[0]
-        if output_dir is not None:
-            output_subdir = output_dir + os.path.dirname(file)[len(input_dir) :]
-            try:
-                os.makedirs(output_subdir, exist_ok=True)
-            except Exception as e:
-                logger.info(output_subdir + " can not be created\n" + str(e))
-
-            output_file = os.path.join(
-                output_subdir, os.path.splitext(os.path.basename(file))[0] + ".npy"
-            )
-
-            # if os.path.exists(output_file):
-            #     print(f"Skipping {file}, output already exists")
-            #     continue
-
         try:
-            with torch.no_grad():
-                features = extract_feature(file, patchilizer, model, device).unsqueeze(
-                    0
+            file_name = os.path.splitext(os.path.basename(file))[0]
+            if output_dir is not None:
+                output_subdir = output_dir + os.path.dirname(file)[len(input_dir) :]
+                try:
+                    os.makedirs(output_subdir, exist_ok=True)
+                except Exception as e:
+                    logger.error(f"Cannot create output directory {output_subdir}: {str(e)}")
+                    continue
+
+                output_file = os.path.join(
+                    output_subdir, os.path.splitext(os.path.basename(file))[0] + ".npy"
                 )
 
-                results[file_name] = {"embeddings": features.detach().cpu().numpy()}
-            if output_dir is not None:
-                np.save(output_file, features.detach().cpu().numpy())
-        except Exception as e:
-            logger.info(f"Failed to process {file}: {e}")
+            try:
+                with torch.no_grad():
+                    # Read and process the MTF file
+                    with open(file, "r", encoding="utf-8") as f:
+                        mtf_content = f.read()
+                    
+                    # Extract features
+                    features = extract_feature(file, patchilizer, model, device)
+                    if features is None:
+                        logger.error(f"Failed to extract features from {file}")
+                        continue
+                        
+                    features = features.unsqueeze(0)
+                    results[file_name] = {"embeddings": features.detach().cpu().numpy()}
+                    logger.info(f"Successfully extracted features from {file}")
 
+                    if output_dir is not None:
+                        np.save(output_file, features.detach().cpu().numpy())
+                        
+            except Exception as e:
+                logger.error(f"Failed to process {file}: {str(e)}")
+                continue
+
+        except Exception as e:
+            logger.error(f"Unexpected error processing {file}: {str(e)}")
+            continue
+
+    if not results:
+        logger.warning("No features were successfully extracted from any files")
+    
     return results

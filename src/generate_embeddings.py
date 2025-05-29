@@ -3,6 +3,7 @@ from pathlib import Path
 import pandas as pd
 import numpy as np
 import h5py
+import time
 
 from audio.processor import AudioProcessor
 from symbolic.processor import SymbolicProcessor
@@ -63,16 +64,23 @@ class GenerateEmbeddings:
                 # Process audio file
                 audio_path = self.raw_dir / row['audio_filename']
                 if audio_path.exists():
+                    logger.info(f"Starting audio embedding generation for: {audio_path}")
                     audio_features[row['id']] = self.audio_processor.process_file(audio_path)
-                    logger.info(f"Processed audio file: {audio_path}")
+                    logger.info(f"Completed audio embedding generation for: {audio_path}")
                 else:
                     logger.warning(f"Audio file not found: {audio_path}")
 
                 # Process MIDI file
                 midi_path = self.raw_dir / row['midi_filename']
                 if midi_path.exists():
-                    symbolic_features[row['id']] = self.symbolic_processor.process_file(midi_path)
-                    logger.info(f"Processed MIDI file: {midi_path}")
+                    logger.info(f"Starting MIDI embedding generation for: {midi_path}")
+                    result = self.symbolic_processor.process_file(midi_path)
+                    if result and 'embeddings' in result:
+                        symbolic_features[row['id']] = result
+                        logger.info(f"Successfully added symbolic embeddings for ID {row['id']}, shape: {result['embeddings'].shape}")
+                    else:
+                        logger.warning(f"No valid embeddings returned for {midi_path}")
+                    logger.info(f"Completed MIDI embedding generation for: {midi_path}")
                 else:
                     logger.warning(f"MIDI file not found: {midi_path}")
 
