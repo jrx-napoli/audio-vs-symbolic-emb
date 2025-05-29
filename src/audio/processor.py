@@ -4,7 +4,6 @@ from typing import Dict, Tuple
 import numpy as np
 import openl3
 import soundfile as sf
-from tqdm import tqdm
 
 from config import *
 from utils.logger import get_logger
