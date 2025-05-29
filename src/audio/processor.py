@@ -103,29 +103,3 @@ class AudioProcessor:
         except Exception as e:
             logger.error(f"Error processing file {file_path}: {str(e)}")
             raise
-
-    # def process_directory(self, input_dir: Path) -> Dict[str, Dict[str, np.ndarray]]:
-    #     """
-    #     Process all audio files in a directory.
-    #
-    #     Args:
-    #         input_dir: Directory containing audio files
-    #
-    #     Returns:
-    #         Dictionary mapping filenames to their features
-    #     """
-    #     results = {}
-    #
-    #     # Get all audio files
-    #     audio_files = list(input_dir.glob("*.wav")) + list(input_dir.glob("*.mp3"))
-    #
-    #     for file_path in tqdm(audio_files):
-    #         try:
-    #             features = self.process_file(file_path)
-    #             results[file_path.stem] = features
-    #             logger.info(f"Processed {file_path.name}")
-    #         except Exception as e:
-    #             logger.error(f"Failed to process {file_path.name}: {str(e)}")
-    #             continue
-    #
-    #     return results
