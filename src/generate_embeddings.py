@@ -1,7 +1,8 @@
 import argparse
 from pathlib import Path
-
+import pandas as pd
 import numpy as np
+import h5py
 
 from audio.processor import AudioProcessor
 from symbolic.processor import SymbolicProcessor
@@ -18,9 +19,9 @@ class GenerateEmbeddings:
         Initialize the experiment runner.
 
         Args:
-            dataset_name: Name of the dataset (e.g., 'GiantMIDI-PIano')
-            output_dir: Directory to save experiment results
+            dataset_name: Name of the dataset (e.g., 'groove')
         """
+        self.results = None
         self.dataset_name = dataset_name
 
         # Setup paths
@@ -39,38 +40,66 @@ class GenerateEmbeddings:
         self.audio_processor = AudioProcessor(self.processed_dir / "audio")
         self.symbolic_processor = SymbolicProcessor()
 
-        # Initialize results storage
-        self.results = {"audio_embeddings": {}, "symbolic_embeddings": {}}
+        # Load metadata
+        self.metadata = pd.read_csv(self.raw_dir / "info.csv")
 
     def process_data(self) -> None:
         """Process raw data into a standardized format."""
         logger.info("Processing data...")
 
-        # Process audio files
-        audio_features = self.audio_processor.process_directory(self.raw_dir / "audio")
-        self.results["audio_embeddings"] = audio_features
+        audio_features = {}
+        symbolic_features = {}
 
-        # Process MIDI files
-        symbolic_features = self.symbolic_processor.process_directory(
-            self.raw_dir / "midi", self.processed_dir / "symbolic"
-        )
-        self.results["symbolic_embeddings"] = symbolic_features
+        # Process files one by one according to metadata
+        for _, row in self.metadata.iterrows():
+            try:
+                # Process audio file
+                audio_path = self.raw_dir / row['audio_filename']
+                if audio_path.exists():
+                    audio_features[row['id']] = self.audio_processor.process_file(audio_path)
+                    logger.info(f"Processed audio file: {audio_path}")
+                else:
+                    logger.warning(f"Audio file not found: {audio_path}")
+
+                # Process MIDI file
+                midi_path = self.raw_dir / row['midi_filename']
+                if midi_path.exists():
+                    symbolic_features[row['id']] = self.symbolic_processor.process_file(midi_path)
+                    logger.info(f"Processed MIDI file: {midi_path}")
+                else:
+                    logger.warning(f"MIDI file not found: {midi_path}")
+
+            except Exception as e:
+                logger.error(f"Error processing files for {row['id']}: {str(e)}")
+                continue
+
+        self.results = {
+            "audio_embeddings": audio_features,
+            "symbolic_embeddings": symbolic_features,
+        }
 
     def transform_embeddings(self) -> None:
         """Generate embeddings for both audio and symbolic formats."""
         logger.info("Generating embeddings...")
 
-        # For now, we'll use the processed features as embeddings
-        # In the future, we can add more sophisticated embedding generation
         audio_embeddings = {}
         symbolic_embeddings = {}
+        metadata_records = []
 
         # Process audio embeddings
         for k, v in self.results["audio_embeddings"].items():
             try:
                 if "embeddings" in v:
-                    # Average OpenL3 embeddings over time
-                    audio_embeddings[k] = np.mean(v["embeddings"], axis=0)
+                    # Store both original sequence and averaged embeddings
+                    audio_embeddings[k] = {
+                        "sequence": v["embeddings"],  # Original time-series embeddings
+                        "average": np.mean(v["embeddings"], axis=0)  # Time-averaged embeddings
+                    }
+                    
+                    # Get corresponding metadata
+                    metadata_row = self.metadata[self.metadata['id'] == k].iloc[0]
+                    # Convert metadata row to dictionary and add to records
+                    metadata_records.append(metadata_row.to_dict())
                 else:
                     logger.warning(f"No embeddings found for {k}")
             except Exception as e:
@@ -80,7 +109,10 @@ class GenerateEmbeddings:
         for k, v in self.results["symbolic_embeddings"].items():
             try:
                 if "embeddings" in v:
-                    symbolic_embeddings[k] = np.mean(v["embeddings"], axis=0)
+                    symbolic_embeddings[k] = {
+                        "sequence": v["embeddings"],  # Original time-series embeddings
+                        "average": np.mean(v["embeddings"], axis=0)  # Time-averaged embeddings
+                    }
                 else:
                     logger.warning(f"No embeddings found for {k}")
             except Exception as e:
@@ -92,39 +124,70 @@ class GenerateEmbeddings:
         if not symbolic_embeddings:
             raise ValueError("No valid symbolic embeddings generated")
 
-        self.results["audio_embeddings"] = audio_embeddings
-        self.results["symbolic_embeddings"] = symbolic_embeddings
+        self.results = {
+            "audio_embeddings": audio_embeddings,
+            "symbolic_embeddings": symbolic_embeddings,
+            "metadata": metadata_records
+        }
 
         logger.info(
             f"Transformed {len(audio_embeddings)} audio embeddings and {len(symbolic_embeddings)} symbolic embeddings"
         )
 
     def save_embeddings(self) -> None:
-        """Save all experiment embeddings."""
+        """Save all experiment embeddings in HDF5 format."""
         logger.info("Saving embeddings...")
 
-        # Save embeddings
-        np.savez(
-            self.embeddings_dir / "embeddings.npz",
-            audio_embeddings=self.results["audio_embeddings"],
-            symbolic_embeddings=self.results["symbolic_embeddings"],
-        )
+        # Create HDF5 file
+        with h5py.File(self.embeddings_dir / "embeddings.h5", 'w') as f:
+
+            # Save audio embeddings
+            audio_group = f.create_group('audio_embeddings')
+
+            for k, v in self.results["audio_embeddings"].items():
+                song_group = audio_group.create_group(k)
+                song_group.create_dataset('sequence', data=v['sequence'])
+                song_group.create_dataset('average', data=v['average'])
+                
+                # Add metadata for this song
+                metadata = self.metadata[self.metadata['id'] == k].iloc[0]
+                for key, value in metadata.items():
+                    if isinstance(value, (str, int, float)):
+                        song_group.create_dataset(key, data=str(value))
+                    else:
+                        song_group.create_dataset(key, data=str(value))
+
+            # Save symbolic embeddings
+            symbolic_group = f.create_group('symbolic_embeddings')
+
+            for k, v in self.results["symbolic_embeddings"].items():
+                song_group = symbolic_group.create_group(k)
+                song_group.create_dataset('sequence', data=v['sequence'])
+                song_group.create_dataset('average', data=v['average'])
+                
+                # Add metadata for this song
+                metadata = self.metadata[self.metadata['id'] == k].iloc[0]
+                for key, value in metadata.items():
+                    if isinstance(value, (str, int, float)):
+                        song_group.create_dataset(key, data=str(value))
+                    else:
+                        song_group.create_dataset(key, data=str(value))
 
         logger.info(f"Embeddings saved to {self.embeddings_dir}")
 
     def run(self) -> None:
         """Run the complete experiment pipeline."""
-        logger.info(f"Starting experiment for dataset: {self.dataset_name}")
+        logger.info(f"Starting to generate embeddings for dataset: {self.dataset_name}")
 
         try:
             self.process_data()
             self.transform_embeddings()
             self.save_embeddings()
 
-            logger.info("Experiment completed successfully!")
+            logger.info("Generating embeddings completed successfully!")
 
         except Exception as e:
-            logger.error(f"Experiment failed: {str(e)}")
+            logger.error(f"Generating embeddings: {str(e)}")
             raise
 
 
@@ -136,7 +199,7 @@ def main() -> None:
         "--dataset",
         type=str,
         required=True,
-        help="Name of the dataset to process (e.g., GiantMIDI-PIano)",
+        help="Name of the dataset to process (e.g., groove)",
     )
 
     args = parser.parse_args()

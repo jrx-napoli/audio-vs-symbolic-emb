@@ -34,27 +34,7 @@ pip install -r requirements.txt
 
 ## Usage
 
-### MIDI to Audio Conversion
-
-The project includes a tool for converting MIDI files to audio format using a custom piano synthesizer. 
-
-#### Usage:
-```bash
-python src/utils/midi_to_audio.py --input_dir data/raw/GiantMIDI-PIano/midi --output_dir data/raw/GiantMIDI-PIano/audio
-```
-
-Parameters:
-- `--input_dir`: Directory containing MIDI files to convert
-- `--output_dir`: Directory where WAV files will be saved
-- `--sample_rate`: (Optional) Sample rate for output audio (default: 44100 Hz)
-
-The conversion process:
-1. Loads MIDI files from the input directory
-2. Processes each note with custom piano synthesis
-3. Applies proper envelope shaping and dynamics
-4. Saves the result as high-quality WAV files
-
-### Generate Embeddings
+### Generating embeddings
 
 The project generates and saves embeddings for audio and symbolic presentation.
 
@@ -66,7 +46,7 @@ python src/generate_embeddings.py --dataset GiantMIDI-PIano
 Parameters:
 - `--dataset`: Name of the dataset to process (e.g., 'GiantMIDI-PIano')
 
-### Running Experiments
+### Running experiments
 
 The project includes a comprehensive experiment runner for comparing audio and symbolic embeddings.
 
