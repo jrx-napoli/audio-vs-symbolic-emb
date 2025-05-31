@@ -5,22 +5,33 @@ This project analyzes the similarities between embeddings of symbolic music (e.g
 ## Project Structure
 
 ```
-├── data/                    # Data storage
+.
+├── data/
 │   ├── raw/                # Raw audio and symbolic music files
 │   │   └── dataset_name/   # Dataset-specific directory
 │   │       ├── info.csv    # Dataset metadata
 │   │       ├── audio/      # Audio files
 │   │       └── midi/       # MIDI files
-│   ├── processed/          # Processed data ready for analysis
-│   └── embeddings/         # Generated embeddings
-├── logs/                   # Error logs from transforming midi files
-├── src/                    # Source code
-│   ├── audio/             # Audio processing and embedding extraction
-│   ├── symbolic/          # Symbolic music processing and embedding extraction
-│   ├── analysis/          # Analysis tools and similarity metrics
-│   └── utils/             # Utility functions
-├── requirements.txt        # Python dependencies
-└── README.md              # This file
+│   └── embeddings/
+│       └── groove/
+│           └── embeddings.h5    # Pre-computed embeddings
+├── src/
+│   ├── data/
+│   │   ├── __init__.py
+│   │   └── embedding_dataset.py # Dataset class for loading embeddings
+│   ├── models/
+│   │   ├── __init__.py
+│   │   └── classifiers.py      # Model architectures
+│   ├── training/
+│   │   ├── __init__.py
+│   │   └── experiment.py       # Training experiment class
+│   ├── utils/
+│   │   ├── __init__.py
+│   │   └── metrics.py         # Evaluation metrics
+│   ├── __init__.py
+│   └── main.py                # CLI entry point
+├── results/                   # Training results and model checkpoints
+└── requirements.txt           # Python dependencies
 ```
 
 ## Dataset requirements
@@ -43,87 +54,91 @@ recording1,audio/rec1.wav,midi/rec1.mid,artist1,jazz,120,swing,4-4,180.5,train
 recording2,audio/rec2.wav,midi/rec2.mid,artist2,rock,140,straight,4-4,240.0,test
 ```
 
-## Setup
+## Installation
 
-1. Create a virtual environment:
+1. Clone the repository:
+```bash
+git clone https://github.com/yourusername/audio-vs-symbolic-emb.git
+cd audio-vs-symbolic-emb
+```
+
+2. Create and activate a virtual environment (optional but recommended):
 ```bash
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 ```
 
-2. Install dependencies:
+3. Install dependencies:
 ```bash
 pip install -r requirements.txt
 ```
 
 ## Usage
 
-### Generating embeddings
+### Training a Classification Model
 
-The project generates and saves embeddings for audio and symbolic presentation.
+The main entry point for training is `src/main.py`. You can run experiments using the following command:
 
-#### Usage:
 ```bash
-python src/generate_embeddings.py --dataset your_dataset_name
+python -m src.main \
+    --h5_path data/embeddings/groove/embeddings.h5 \
+    --medium audio_embeddings \
+    --label style \
+    --batch_size 32 \
+    --learning_rate 0.001 \
+    --num_epochs 50
 ```
 
-Parameters:
-- `--dataset`: Name of your dataset directory under `data/raw/`
+#### Command Line Arguments
 
-The script will:
-1. Process each audio and MIDI file pair listed in `info.csv`
-2. Generate embeddings for both formats
-3. Save the results in HDF5 format under `data/embeddings/your_dataset_name/embeddings.h5`
+- `--h5_path`: Path to the HDF5 file containing embeddings (required)
+- `--medium`: Type of embeddings to use (required, choices: 'audio_embeddings' or 'symbolic_embeddings')
+- `--label`: Target label for classification (required, e.g., 'style', 'drummerId')
+- `--batch_size`: Batch size for training (default: 32)
+- `--learning_rate`: Learning rate (default: 0.001)
+- `--num_epochs`: Number of training epochs (default: 50)
+- `--save_dir`: Directory to save model and results (optional, defaults to results/{medium}_{label}_{timestamp})
 
-The HDF5 file structure:
-```
-embeddings.h5
-├── audio_embeddings/
-│   ├── recording_id/
-│   │   ├── sequence      # Original time-series embeddings
-│   │   ├── average      # Time-averaged embeddings
-│   │   └── [metadata]   # All metadata fields from info.csv
-│   └── ...
-└── symbolic_embeddings/
-    ├── recording_id/
-    │   ├── sequence      # Original time-series embeddings
-    │   ├── average      # Time-averaged embeddings
-    │   └── [metadata]   # All metadata fields from info.csv
-    └── ...
-```
+### Results
 
-### Running experiments
+Training results are saved in the `results` directory (or specified `save_dir`), including:
+- `best_model.pth`: The best model checkpoint based on validation accuracy
+- `training_history.json`: Training metrics and configuration
 
-The project includes a comprehensive experiment runner for comparing audio and symbolic embeddings.
+### Custom Models
 
-#### Usage:
-```bash
-python src/compare_embeddings.py --dataset your_dataset_name --output_dir results
-```
+To use a custom model architecture:
 
-Parameters:
-- `--dataset`: Name of your dataset directory under `data/raw/`
-- `--output_dir`: Directory to save experiment results (default: 'results')
+1. Create a new model class in `src/models/classifiers.py` or a new file in the `models` directory
+2. Inherit from `torch.nn.Module`
+3. Implement the required interface:
+   ```python
+   class MyCustomModel(nn.Module):
+       def __init__(self, input_dim: int, num_classes: int, **kwargs):
+           super().__init__()
+           # Your model architecture here
+           
+       def forward(self, x):
+           # Forward pass implementation
+           return output
+   ```
+4. Use your model by modifying the `model_fn` parameter in `src/main.py`
 
-The experiment pipeline:
-1. **Loading embeddings**
-   - Loads previously generated embeddings
+## Development
 
-2. **Similarity Analysis**
-   - Computes cosine similarity between audio and symbolic embeddings
-   - Generates visualizations (PCA, t-SNE)
-   - Performs statistical analysis
+### Adding New Features
 
-3. **Results**
-   - Saves similarity scores
-   - Generates visualizations and statistics
-   - Creates comprehensive analysis reports
+1. **New Dataset Types**: Add new dataset classes in `src/data/`
+2. **New Models**: Add new model architectures in `src/models/`
+3. **New Training Procedures**: Extend `ClassificationExperiment` in `src/training/`
+4. **New Utilities**: Add helper functions in `src/utils/`
 
-Output files:
-- `similarities.npy`: Similarity scores between embeddings
-- `statistics.txt`: Statistical analysis results
-- `embedding_visualization.png`: PCA and t-SNE plots
-- `similarity_distribution.png`: Distribution of similarity scores
+### Code Style
+
+- Follow PEP 8 guidelines
+- Use type hints for function arguments and return values
+- Document classes and functions with docstrings
+- Keep modules focused and single-purpose
 
 ## License
 
