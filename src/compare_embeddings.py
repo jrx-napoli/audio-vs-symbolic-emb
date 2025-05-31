@@ -11,8 +11,8 @@ from utils.logger import get_logger
 logger = get_logger(__name__)
 
 
-class ExperimentRunner:
-    """Class running experiments for generated embeddings"""
+class ComparisonRunner:
+    """Class running comparison experiments for generated embeddings"""
     def __init__(self, dataset_name: str, output_dir: str):
         """
         Initialize the experiment runner.
@@ -126,7 +126,7 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    runner = ExperimentRunner(args.dataset, args.output_dir)
+    runner = ComparisonRunner(args.dataset, args.output_dir)
     runner.run()
 
 

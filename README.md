@@ -98,7 +98,7 @@ The project includes a comprehensive experiment runner for comparing audio and s
 
 #### Usage:
 ```bash
-python src/run_experiment.py --dataset your_dataset_name --output_dir results
+python src/compare_embeddings.py --dataset your_dataset_name --output_dir results
 ```
 
 Parameters:
