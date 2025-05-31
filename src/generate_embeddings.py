@@ -1,9 +1,9 @@
 import argparse
 from pathlib import Path
-import pandas as pd
-import numpy as np
+
 import h5py
-import time
+import numpy as np
+import pandas as pd
 
 from audio.processor import AudioProcessor
 from symbolic.processor import SymbolicProcessor
@@ -57,7 +57,7 @@ class GenerateEmbeddings:
         for _, row in self.metadata.iterrows():
 
             counter += 1
-            if counter == 5:
+            if counter == 10:
                 break
 
             try:
@@ -136,8 +136,8 @@ class GenerateEmbeddings:
         # Validate embeddings
         if not audio_embeddings:
             raise ValueError("No valid audio embeddings generated")
-        # if not symbolic_embeddings:
-        #     raise ValueError("No valid symbolic embeddings generated")
+        if not symbolic_embeddings:
+            raise ValueError("No valid symbolic embeddings generated")
 
         self.results = {
             "audio_embeddings": audio_embeddings,
