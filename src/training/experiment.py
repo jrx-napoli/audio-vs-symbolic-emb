@@ -71,7 +71,8 @@ class ClassificationExperiment:
         num_epochs: int = 50,
         device: str = "cuda" if torch.cuda.is_available() else "cpu",
         train_val_test_split: tuple = (0.6, 0.2, 0.2),  # (train, val, test) proportions
-        random_seed: int = 42
+        random_seed: int = 42,
+        emb_type: str = 'average'  # Add emb_type parameter with default
     ):
         self.h5_path = h5_path
         self.medium = medium
@@ -84,6 +85,7 @@ class ClassificationExperiment:
         self.device = device
         self.train_val_test_split = train_val_test_split
         self.random_seed = random_seed
+        self.emb_type = emb_type  # Store emb_type
         
         # Set random seeds for reproducibility
         torch.manual_seed(random_seed)
@@ -99,7 +101,7 @@ class ClassificationExperiment:
         original_dataset = EmbeddingDataset(
             h5_path=self.h5_path,
             medium=self.medium,
-            emb_type='sequence',  # Using average embeddings for classification TODO: change to paramatred to be sequence
+            emb_type=self.emb_type,  # Use the emb_type parameter
             label=self.label
         )
         
@@ -122,6 +124,7 @@ class ClassificationExperiment:
         # Print dataset information
         print("\nDataset Information:")
         print("-" * 50)
+        print(f"Embedding type: {self.emb_type}")  
         print("Original classes mapped to simplified classes:")
         for idx, class_name in enumerate(original_classes):
             simplified_idx = class_mapping[idx]
@@ -166,21 +169,21 @@ class ClassificationExperiment:
             batch_size=self.batch_size,
             shuffle=True,
             num_workers=4,
-            collate_fn=collate_sequences
+            collate_fn=collate_sequences if self.emb_type == 'sequence' else None  # Use collate_fn only for sequences
         )
         self.val_loader = DataLoader(
             self.val_dataset,
             batch_size=self.batch_size,
             shuffle=False,
             num_workers=4,
-            collate_fn=collate_sequences
+            collate_fn=collate_sequences if self.emb_type == 'sequence' else None
         )
         self.test_loader = DataLoader(
             self.test_dataset,
             batch_size=self.batch_size,
             shuffle=False,
             num_workers=4,
-            collate_fn=collate_sequences
+            collate_fn=collate_sequences if self.emb_type == 'sequence' else None
         )
         
     def _setup_model(self):

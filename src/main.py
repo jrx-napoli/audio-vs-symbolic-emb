@@ -16,6 +16,8 @@ def main():
     parser.add_argument('--learning_rate', type=float, default=0.001, help='Learning rate')
     parser.add_argument('--num_epochs', type=int, default=50, help='Number of training epochs')
     parser.add_argument('--save_dir', type=str, help='Directory to save model and results')
+    parser.add_argument('--embedding_type', type=str, choices=['sequence', 'average'],
+                      default='average', help='Type of embedding to use (sequence or average)')
     args = parser.parse_args()
     
     # Create save directory with timestamp if not provided
@@ -38,7 +40,8 @@ def main():
         model_kwargs=model_kwargs,
         batch_size=args.batch_size,
         learning_rate=args.learning_rate,
-        num_epochs=args.num_epochs
+        num_epochs=args.num_epochs,
+        emb_type=args.embedding_type
     )
     
     experiment.train(save_dir=args.save_dir)
