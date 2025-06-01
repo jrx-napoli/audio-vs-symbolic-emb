@@ -2,10 +2,9 @@ import argparse
 from pathlib import Path
 
 import numpy as np
+import h5py
 
 from analysis.comparator import EmbeddingComparator
-from audio.processor import AudioProcessor
-from symbolic.processor import SymbolicProcessor
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -13,30 +12,19 @@ logger = get_logger(__name__)
 
 class ComparisonRunner:
     """Class running comparison experiments for generated embeddings"""
-    def __init__(self, dataset_name: str, output_dir: str):
+    def __init__(self, h5_path: str, output_dir: str):
         """
         Initialize the experiment runner.
 
         Args:
-            dataset_name: Name of the dataset (e.g., 'GiantMIDI-PIano')
+            h5_path: Path to the HDF5 file containing embeddings
             output_dir: Directory to save experiment results
         """
-        self.dataset_name = dataset_name
+        self.h5_path = Path(h5_path)
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
-        # Setup paths
-        self.raw_dir = Path("data/raw") / dataset_name
-        self.processed_dir = Path("data/processed") / dataset_name
-        self.embeddings_dir = Path("data/embeddings") / dataset_name
-
-        # Create necessary directories
-        self.processed_dir.mkdir(parents=True, exist_ok=True)
-        self.embeddings_dir.mkdir(parents=True, exist_ok=True)
-
-        # Initialize processors
-        self.audio_processor = AudioProcessor(self.processed_dir / "audio")
-        self.symbolic_processor = SymbolicProcessor()
+        # Initialize comparator
         self.comparator = EmbeddingComparator(self.output_dir)
 
         # Initialize results storage
@@ -47,15 +35,26 @@ class ComparisonRunner:
         }
 
     def load_embeddings(self) -> None:
-        """Load embeddings from directory"""
+        """Load average embeddings from HDF5 file"""
         logger.info("Loading embeddings...")
 
         try:
-            data = np.load(self.embeddings_dir / "embeddings.npz", allow_pickle=True)
-            self.results["audio_embeddings"] = data["audio_embeddings"].item()
-            self.results["symbolic_embeddings"] = data["symbolic_embeddings"].item()
+            with h5py.File(self.h5_path, 'r') as f:
+                # Load audio embeddings
+                audio_group = f['audio_embeddings']
+                for key in audio_group.keys():
+                    self.results["audio_embeddings"][key] = np.array(audio_group[key]['average'])
+                
+                # Load symbolic embeddings
+                symbolic_group = f['symbolic_embeddings']
+                for key in symbolic_group.keys():
+                    self.results["symbolic_embeddings"][key] = np.array(symbolic_group[key]['average'])
+                
+            logger.info(f"Loaded {len(self.results['audio_embeddings'])} audio embeddings and "
+                       f"{len(self.results['symbolic_embeddings'])} symbolic embeddings")
+            
         except Exception as e:
-            logger.error(f"Did not find files with embeddings. More info: {str(e)}")
+            logger.error(f"Error loading embeddings from H5 file: {str(e)}")
             raise
 
     def compute_similarities(self) -> None:
@@ -92,7 +91,7 @@ class ComparisonRunner:
 
     def run(self) -> None:
         """Run the complete experiment pipeline."""
-        logger.info(f"Starting experiment for dataset: {self.dataset_name}")
+        logger.info(f"Starting static embedding comparison from: {self.h5_path}")
 
         try:
             self.load_embeddings()
@@ -109,24 +108,24 @@ class ComparisonRunner:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Run audio vs symbolic embeddings analysis"
+        description="Compare average embeddings from audio and symbolic data"
     )
     parser.add_argument(
-        "--dataset",
+        "--h5_path",
         type=str,
         required=True,
-        help="Name of the dataset to process (e.g., GiantMIDI-PIano)",
+        help="Path to the HDF5 file containing embeddings",
     )
     parser.add_argument(
         "--output_dir",
         type=str,
-        default="results",
+        default="results/static_comparison",
         help="Directory to save experiment results",
     )
 
     args = parser.parse_args()
 
-    runner = ComparisonRunner(args.dataset, args.output_dir)
+    runner = ComparisonRunner(args.h5_path, args.output_dir)
     runner.run()
 
 

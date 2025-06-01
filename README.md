@@ -73,7 +73,21 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-## Usage
+## Generating embeddings
+
+The project generates and saves embeddings for audio and symbolic presentation.
+
+#### Usage:
+
+```bash
+python src/generate_embeddings.py --dataset your_dataset_name
+```
+
+The script will:
+1. Process each audio and MIDI file pair listed in `info.csv`
+2. Generate embeddings for both formats
+3. Save the results in HDF5 format under `data/embeddings/your_dataset_name/embeddings.h5`
+
 
 ### Training a Classification Model
 

@@ -185,25 +185,9 @@ def extract_feature(filename, patchilizer, model, device):
 
         # Calculate weights and combine results
         try:
-            full_chunk_cnt = len(input_data) // max_input_length
-            remain_chunk_len = len(input_data) % max_input_length
-            if remain_chunk_len == 0:
-                feature_weights = torch.tensor(
-                    [max_input_length] * full_chunk_cnt, device=device
-                ).view(-1, 1)
-            else:
-                feature_weights = torch.tensor(
-                    [max_input_length] * full_chunk_cnt + [remain_chunk_len], device=device
-                ).view(-1, 1)
-
-            last_hidden_states_list = torch.concat(last_hidden_states_list, 0)
-            last_hidden_states_list = last_hidden_states_list * feature_weights
-            last_hidden_states_list = last_hidden_states_list.sum(dim=0) / feature_weights.sum()
-
-            return last_hidden_states_list
-        except Exception as e:
-            logger.error(f"Failed to combine feature segments: {str(e)}")
-            return None
+            # Instead of averaging, return the sequence of embeddings
+            last_hidden_states_sequence = torch.concat(last_hidden_states_list, 0)
+            return last_hidden_states_sequence
 
     except Exception as e:
         logger.error(f"Unexpected error in feature extraction: {str(e)}")
@@ -253,9 +237,9 @@ def process_directory(
                         logger.error(f"Failed to extract features from {file}")
                         continue
                         
-                    features = features.unsqueeze(0)
+                    # Store the features directly
                     results[file_name] = {"embeddings": features.detach().cpu().numpy()}
-                    logger.info(f"Successfully extracted features from {file}")
+                    logger.info(f"Successfully extracted features from {file}, shape={features.shape}")
 
                     if output_dir is not None:
                         np.save(output_file, features.detach().cpu().numpy())

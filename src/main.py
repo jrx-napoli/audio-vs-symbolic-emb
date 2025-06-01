@@ -42,7 +42,7 @@ def main():
     )
     
     experiment.train(save_dir=args.save_dir)
-    experiment.final_evaluation()
+    experiment.final_evaluation(save_dir=args.save_dir)
 
 
 if __name__ == "__main__":

@@ -51,14 +51,8 @@ class GenerateEmbeddings:
         audio_features = {}
         symbolic_features = {}
 
-        counter = 0
-
         # Process files one by one according to metadata
         for _, row in self.metadata.iterrows():
-
-            counter += 1
-            if counter == 10:
-                break
 
             try:
                 # Process audio file
