@@ -92,6 +92,7 @@ class AudioProcessor:
 
             # Extract features
             features = self.extract_features(audio, sr)
+            logger.info(f"Successfully extracted features from {file_path}, shape={features['embeddings'].shape}")
 
             # Save features
             output_path = self.output_dir / f"{file_path.stem}_features.npz"

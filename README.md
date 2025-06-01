@@ -89,7 +89,21 @@ The script will:
 3. Save the results in HDF5 format under `data/embeddings/your_dataset_name/embeddings.h5`
 
 
-### Training a Classification Model
+## Comparing Embeddings
+
+The project includes a comprehensive experiment runner for comparing audio and symbolic embeddings.
+
+```bash
+python src/compare_embeddings.py --h5_path data/embeddings/groove/embeddings.h5 --output_dir results --label style  
+```
+
+#### Command Line Arguments
+
+- `--h5_path`: Path to the HDF5 file containing embeddings (required)
+- `--output_dir`: Directory to save results.
+- `--label`: (Optional) What labels should be compared for both audio and symbolic embeddings. If not given the script will compare aduio embeddings agains symbolic embeddings. 
+
+## Training a Classification Model
 
 The main entry point for training is `src/main.py`. You can run experiments using the following command:
 

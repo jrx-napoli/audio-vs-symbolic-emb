@@ -188,6 +188,9 @@ def extract_feature(filename, patchilizer, model, device):
             # Instead of averaging, return the sequence of embeddings
             last_hidden_states_sequence = torch.concat(last_hidden_states_list, 0)
             return last_hidden_states_sequence
+        except Exception as e:
+            logger.error(f"Failed to combine results: {str(e)}")
+            return None
 
     except Exception as e:
         logger.error(f"Unexpected error in feature extraction: {str(e)}")

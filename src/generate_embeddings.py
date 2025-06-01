@@ -30,12 +30,10 @@ class GenerateEmbeddings:
         self.processed_dir = Path("data/processed") / dataset_name
         self.embeddings_dir = Path("data/embeddings") / dataset_name
 
-        remove_folder(Path("data/processed") / dataset_name)
-        remove_folder(Path("data/embeddings") / dataset_name)
+        remove_folder(self.processed_dir)
 
         # Create necessary directories
         self.processed_dir.mkdir(parents=True, exist_ok=True)
-        self.embeddings_dir.mkdir(parents=True, exist_ok=True)
 
         # Initialize processors
         self.audio_processor = AudioProcessor(self.processed_dir / "audio")
@@ -145,8 +143,9 @@ class GenerateEmbeddings:
 
     def save_embeddings(self) -> None:
         """Save all experiment embeddings in HDF5 format."""
+        remove_folder(self.embeddings_dir)
+        self.embeddings_dir.mkdir(parents=True, exist_ok=True)
         logger.info("Saving embeddings...")
-
         # Create HDF5 file
         with h5py.File(self.embeddings_dir / "embeddings.h5", 'w') as f:
 
