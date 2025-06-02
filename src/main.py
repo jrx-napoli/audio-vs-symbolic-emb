@@ -25,18 +25,25 @@ def main():
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         args.save_dir = f"results/{args.medium}_{args.label}_{timestamp}"
     
-    # Define model configuration
-    model_kwargs = {
-        'hidden_dims': [512, 256],
-        'dropout': 0.5
-    }
+    # Define model configuration based on embedding type
+    if args.embedding_type == 'sequence':
+        model_kwargs = {
+            'hidden_dim': 256,
+            'num_layers': 2,
+            'dropout': 0.5
+        }
+    else:
+        model_kwargs = {
+            'hidden_dims': [512, 256],
+            'dropout': 0.5
+        }
     
     # Create and run experiment
     experiment = ClassificationExperiment(
         h5_path=args.h5_path,
         medium=args.medium,
         label=args.label,
-        model_fn=SimpleClassifier,
+        model_fn=SimpleClassifier,  # This is not used anymore as model selection is handled in experiment
         model_kwargs=model_kwargs,
         batch_size=args.batch_size,
         learning_rate=args.learning_rate,
@@ -44,6 +51,7 @@ def main():
         emb_type=args.embedding_type
     )
     
+    # Train the model
     experiment.train(save_dir=args.save_dir)
     experiment.final_evaluation(save_dir=args.save_dir)
 

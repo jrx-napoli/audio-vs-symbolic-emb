@@ -11,28 +11,29 @@ from sklearn.metrics import classification_report
 from torch.utils.data import DataLoader, random_split, Dataset
 
 from src.data.embedding_dataset import EmbeddingDataset
+from src.models.classifiers import SimpleClassifier, LSTMClassifier
 from src.utils.metrics import evaluate_model
 
 
 def collate_sequences(batch: List[Tuple[torch.Tensor, int]]) -> Tuple[torch.Tensor, torch.Tensor]:
-    """Custom collate function that averages sequences to fixed-length vectors.
+    """Custom collate function for sequence data that pads sequences to the same length.
     
     Args:
         batch: List of tuples (sequence, label)
         
     Returns:
-        Tuple of (averaged_embeddings, labels)
+        Tuple of (padded_sequences, labels)
     """
     # Separate sequences and labels
     sequences, labels = zip(*batch)
     
-    # Average each sequence to get fixed-size embeddings
-    averaged_embeddings = torch.stack([seq.mean(dim=0) for seq in sequences])
+    # Pad sequences to the same length
+    padded_sequences = rnn_utils.pad_sequence(sequences, batch_first=True)
     
     # Convert labels to tensor
     labels = torch.tensor(labels)
     
-    return averaged_embeddings, labels
+    return padded_sequences, labels
 
 
 class MappedDataset(Dataset):
@@ -85,7 +86,7 @@ class ClassificationExperiment:
         self.device = device
         self.train_val_test_split = train_val_test_split
         self.random_seed = random_seed
-        self.emb_type = emb_type  # Store emb_type
+        self.emb_type = emb_type
         
         # Set random seeds for reproducibility
         torch.manual_seed(random_seed)
@@ -101,7 +102,7 @@ class ClassificationExperiment:
         original_dataset = EmbeddingDataset(
             h5_path=self.h5_path,
             medium=self.medium,
-            emb_type=self.emb_type,  # Use the emb_type parameter
+            emb_type=self.emb_type, 
             label=self.label
         )
         
@@ -190,17 +191,27 @@ class ClassificationExperiment:
         """Initialize the model and training components."""
         # Get input dimension from first sample
         sample_emb, _ = self.dataset[0]
-        # For sequence data, we're using the mean, so input_dim is the feature dimension
-        input_dim = sample_emb.shape[-1]
+        input_dim = sample_emb.shape[-1]  # Last dimension is feature dimension
         num_classes = len(self.dataset.get_classes())
         
-        # Initialize model
-        self.model = self.model_fn(
-            input_dim=input_dim,
-            num_classes=num_classes,
-            **self.model_kwargs
-        ).to(self.device)
-        
+        # Initialize model based on embedding type
+        if self.emb_type == 'sequence':
+            # For sequence data, use LSTM classifier
+            self.model = LSTMClassifier(
+                input_dim=input_dim,
+                hidden_dim=self.model_kwargs.get('hidden_dim', 256),
+                num_classes=num_classes,
+                num_layers=self.model_kwargs.get('num_layers', 2),
+                dropout=self.model_kwargs.get('dropout', 0.5)
+            ).to(self.device)
+        else:
+            # For averaged embeddings, use simple feed-forward classifier
+            self.model = SimpleClassifier(
+                input_dim=input_dim,
+                hidden_dims=self.model_kwargs.get('hidden_dims', [512, 256]),
+                num_classes=num_classes,
+                dropout=self.model_kwargs.get('dropout', 0.5)
+            ).to(self.device)
         # Setup loss and optimizer
         self.criterion = nn.CrossEntropyLoss()
         self.optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)

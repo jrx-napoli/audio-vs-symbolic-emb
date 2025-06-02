@@ -114,7 +114,8 @@ python -m src.main \
     --label style \
     --batch_size 32 \
     --learning_rate 0.001 \
-    --num_epochs 50
+    --num_epochs 50 \
+    --embedding_type average 
 ```
 
 #### Command Line Arguments
@@ -126,7 +127,7 @@ python -m src.main \
 - `--learning_rate`: Learning rate (default: 0.001)
 - `--num_epochs`: Number of training epochs (default: 50)
 - `--save_dir`: Directory to save model and results (optional, defaults to results/{medium}_{label}_{timestamp})
-
+- `--embedding_type`: Embedding type that should be compared ('average'/'sequence' - default: 'average)
 ### Results
 
 Training results are saved in the `results` directory (or specified `save_dir`), including:
