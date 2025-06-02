@@ -128,6 +128,7 @@ python -m src.main \
 - `--num_epochs`: Number of training epochs (default: 50)
 - `--save_dir`: Directory to save model and results (optional, defaults to results/{medium}_{label}_{timestamp})
 - `--embedding_type`: Embedding type that should be compared ('average'/'sequence' - default: 'average)
+- `--model`: Path to a pre-trained model (.pth file). If provided, skips training
 ### Results
 
 Training results are saved in the `results` directory (or specified `save_dir`), including:

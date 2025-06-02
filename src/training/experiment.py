@@ -65,7 +65,6 @@ class ClassificationExperiment:
         h5_path: str,
         medium: str,
         label: str,
-        model_fn: Callable[[int, int], nn.Module],
         model_kwargs: Dict[str, Any],
         batch_size: int = 32,
         learning_rate: float = 0.001,
@@ -78,7 +77,6 @@ class ClassificationExperiment:
         self.h5_path = h5_path
         self.medium = medium
         self.label = label
-        self.model_fn = model_fn
         self.model_kwargs = model_kwargs
         self.batch_size = batch_size
         self.learning_rate = learning_rate
@@ -121,21 +119,10 @@ class ClassificationExperiment:
         # Create wrapped dataset with mapping
         self.dataset = MappedDataset(original_dataset, class_mapping)
         self.dataset.set_simplified_classes(simplified_classes)
-        
-        # Print dataset information
-        print("\nDataset Information:")
-        print("-" * 50)
-        print(f"Embedding type: {self.emb_type}")  
-        print("Original classes mapped to simplified classes:")
+
         for idx, class_name in enumerate(original_classes):
             simplified_idx = class_mapping[idx]
-            print(f"{class_name:<40} -> {simplified_classes[simplified_idx]}")
-        print("\nSimplified Dataset Statistics:")
-        print("-" * 50)
-        print(f"Total number of samples: {len(self.dataset)}")
-        print(f"Number of simplified classes: {len(simplified_classes)}")
-        print("\nSimplified classes and their counts:")
-        print("-" * 50)
+
         
         # Get labels for all samples using new mapping
         all_labels = []
@@ -256,7 +243,6 @@ class ClassificationExperiment:
             # Save best model
             if save_dir and val_acc > best_val_acc:
                 best_val_acc = val_acc
-                os.makedirs(save_dir, exist_ok=True)
                 torch.save({
                     'epoch': epoch,
                     'model_state_dict': self.model.state_dict(),
@@ -328,23 +314,6 @@ class ClassificationExperiment:
         """Perform final evaluation on the test set and print detailed metrics."""
         classes = self.dataset.get_classes()
         
-        # Evaluate on validation set
-        val_acc, val_preds, val_labels = evaluate_model(self.model, self.val_loader, self.device)
-        
-        # Get unique classes present in validation data
-        unique_val_classes = sorted(set(val_labels))
-        val_class_names = [classes[i] for i in unique_val_classes]
-        
-        print("\nFinal Validation Results:")
-        print(f"Accuracy: {val_acc:.4f}")
-        print("\nValidation Classification Report:")
-        print(classification_report(
-            val_labels,
-            val_preds,
-            target_names=val_class_names,
-            labels=unique_val_classes
-        ))
-        
         # Evaluate on test set
         test_acc, test_preds, test_labels = evaluate_model(self.model, self.test_loader, self.device)
         
@@ -359,10 +328,11 @@ class ClassificationExperiment:
             test_labels,
             test_preds,
             target_names=test_class_names,
-            labels=unique_test_classes
+            labels=unique_test_classes,
+            zero_division=0
         ))
         
-        if save_dir:
+        if save_dir:     
             # Save detailed metrics to JSON
             metrics = {
                 'validation': {
@@ -372,7 +342,8 @@ class ClassificationExperiment:
                         val_preds,
                         target_names=val_class_names,
                         labels=unique_val_classes,
-                        output_dict=True
+                        output_dict=True,
+                        zero_division=0
                     ),
                     'classes_present': val_class_names
                 },
@@ -383,7 +354,8 @@ class ClassificationExperiment:
                         test_preds,
                         target_names=test_class_names,
                         labels=unique_test_classes,
-                        output_dict=True
+                        output_dict=True,
+                        zero_division=0
                     ),
                     'classes_present': test_class_names
                 },
@@ -396,3 +368,15 @@ class ClassificationExperiment:
             print("\nNote: Some classes might not appear in validation/test sets due to random splitting.")
             print("All possible classes:", len(classes))
             print("Classes in validation set:", len(val_class_names))
+
+    def load_model(self, model_path: str):
+        """Load a pre-trained model from a checkpoint file.
+        
+        Args:
+            model_path: Path to the .pth checkpoint file
+        """
+        checkpoint = torch.load(model_path, map_location=self.device, weights_only=True)
+        self.model.load_state_dict(checkpoint['model_state_dict'])
+        self.model.eval()  # Set model to evaluation mode
+        print(f"Successfully loaded model from {model_path}")
+        print(f"Model's validation accuracy when saved: {checkpoint['val_accuracy']:.4f}")
