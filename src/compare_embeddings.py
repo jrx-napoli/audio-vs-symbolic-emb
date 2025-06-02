@@ -55,6 +55,13 @@ class ComparisonRunner:
         """Get simplified label by taking part before '/'."""
         return label.split('/')[0]
 
+    def pad_embeddings(self, embeddings: np.ndarray, target_dim: int) -> np.ndarray:
+        """Pad embeddings with zeros to match target dimension."""
+        if embeddings.shape[-1] >= target_dim:
+            return embeddings[..., :target_dim]  # Truncate if larger
+        padding_width = [(0, 0)] * (embeddings.ndim - 1) + [(0, target_dim - embeddings.shape[-1])]
+        return np.pad(embeddings, padding_width, mode='constant', constant_values=0)
+
     def load_embeddings(self) -> None:
         """Load embeddings and their labels from HDF5 file"""
         logger.info("Loading embeddings...")
@@ -183,8 +190,15 @@ class ComparisonRunner:
 
     def _create_comparison_visualization(self, audio_embeddings, symbolic_embeddings, output_path):
         """Create visualization comparing audio and symbolic embeddings."""
+        # Get the maximum dimension between audio and symbolic embeddings
+        max_dim = max(audio_embeddings.shape[1], symbolic_embeddings.shape[1])
+        
+        # Pad embeddings to match dimensions
+        audio_embeddings_padded = self.pad_embeddings(audio_embeddings, max_dim)
+        symbolic_embeddings_padded = self.pad_embeddings(symbolic_embeddings, max_dim)
+        
         # Combine embeddings
-        X = np.vstack([audio_embeddings, symbolic_embeddings])
+        X = np.vstack([audio_embeddings_padded, symbolic_embeddings_padded])
         labels = ['Audio'] * len(audio_embeddings) + ['Symbolic'] * len(symbolic_embeddings)
         
         # Create figure with three subplots
